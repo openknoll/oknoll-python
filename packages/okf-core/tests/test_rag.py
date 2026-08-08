@@ -122,7 +122,7 @@ def test_index_is_cached_per_revision_as_derived_state(minimal: Path, tmp_path: 
     # Give the bundle a pinned revision so the cache path is keyed.
     oknoll = minimal / ".oknoll"
     (oknoll / "revisions" / "rev-test").mkdir(parents=True)
-    (oknoll / "CURRENT").write_text("rev-test\n", encoding="utf-8")
+    (oknoll / "current").write_text("rev-test\n", encoding="utf-8")
 
     embedder = StubEmbeddingProvider()
     first = ensure_rag_index(minimal, embedder)
