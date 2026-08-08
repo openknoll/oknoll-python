@@ -1,0 +1,7 @@
+{
+  "expect_codes": [
+    "conformance/missing-type"
+  ],
+  "passes_default": false,
+  "passes_strict": false
+}

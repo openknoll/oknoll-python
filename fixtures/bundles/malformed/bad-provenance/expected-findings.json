@@ -1,0 +1,10 @@
+{
+  "expect_codes": [
+    "provenance/invalid-status",
+    "provenance/invalid-generated",
+    "provenance/invalid-stale-after",
+    "provenance/unsupported-claim"
+  ],
+  "passes_default": true,
+  "passes_strict": false
+}

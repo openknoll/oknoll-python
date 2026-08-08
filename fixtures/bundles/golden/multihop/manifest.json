@@ -1,0 +1,29 @@
+{
+  "okf_version": "0.2",
+  "files": {
+    "concepts/duty-roster.md": {
+      "sha256": "0940fb130611e696504a02d4c0ec026a01329c2032cf2dc0b3c4c826f6d1f1ce",
+      "bytes": 666
+    },
+    "concepts/incident-response.md": {
+      "sha256": "c66197b6c83229a14efeaaf3e0cfd61bbcc29fccf6f800f33cef4b74c642ba8c",
+      "bytes": 634
+    },
+    "concepts/release-process.md": {
+      "sha256": "38a5fd890457ecced82632d9f9a979784f3cb461a5f80b85b7bb80aa17295cea",
+      "bytes": 699
+    },
+    "index.md": {
+      "sha256": "6fff2a1d4d6a410dfdb94ce7908301ff8f36938a500d31585e07d32e28265056",
+      "bytes": 308
+    },
+    "log.md": {
+      "sha256": "9929bc70d76ac374a3832ab5d1e58dbb3029dfe3cb3b20734bf85b71e5028717",
+      "bytes": 63
+    },
+    "references/source-001.md": {
+      "sha256": "c0b8590f705b01e997887414d89e51e1e38c1c15e1376ad779de971f88566500",
+      "bytes": 356
+    }
+  }
+}

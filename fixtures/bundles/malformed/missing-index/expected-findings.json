@@ -1,0 +1,7 @@
+{
+  "expect_codes": [
+    "conformance/missing-index"
+  ],
+  "passes_default": false,
+  "passes_strict": false
+}

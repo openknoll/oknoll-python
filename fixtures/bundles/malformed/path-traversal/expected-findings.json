@@ -1,0 +1,7 @@
+{
+  "expect_codes": [
+    "integrity/path-traversal"
+  ],
+  "passes_default": false,
+  "passes_strict": false
+}

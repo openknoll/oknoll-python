@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python lint / typecheck / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install workspace
+        run: make install
+      - name: Lint
+        run: make lint
+      - name: Type-check
+        run: make typecheck
+      # Release gates (design §18.1): a failure here stops a release, so they get
+      # their own step to be legible in the checks UI. `make test` reruns them.
+      - name: Security corpora (SSRF + prompt injection)
+        run: make security
+      - name: Test
+        run: make test

@@ -1,0 +1,5 @@
+Operational notes for the example site.
+
+Deploys happen from the develop branch after smoke tests pass.
+
+Rollbacks reuse the previous image digest, never a rebuild.

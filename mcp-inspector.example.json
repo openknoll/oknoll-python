@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "oknoll": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-sync",
+        "--project",
+        "/absolute/path/to/oknoll-python",
+        "oknoll",
+        "serve",
+        "--mcp",
+        "--bundle",
+        "/absolute/path/to/your/bundle"
+      ]
+    }
+  }
+}

@@ -1,0 +1,5 @@
+Weekly sync notes, kept as plain text.
+
+Decisions: adopt the new deploy checklist starting next sprint.
+
+Open question: who owns the fixture refresh procedure?

@@ -1,0 +1,7 @@
+{
+  "expect_codes": [
+    "conformance/unparseable-frontmatter"
+  ],
+  "passes_default": false,
+  "passes_strict": false
+}
