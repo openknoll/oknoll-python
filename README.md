@@ -6,9 +6,9 @@ and explore them through a deterministic navigation layer (CLI, web, MCP). The f
 contract — a valid bundle stays useful without an OpenKnoll account, cloud service, or
 proprietary reader.
 
-- Design source of truth: [`docs/openknoll-merged-design-solo.md`](docs/openknoll-merged-design-solo.md)
-- Execution plan: [`docs/implementation-plan.md`](docs/implementation-plan.md)
-- Decision records: [`docs/adr/`](docs/adr/)
+Project documents (design source of truth, implementation plan, decision records, sprint
+handovers, the frozen benchmark) live in the private
+[`oknoll-main`](https://github.com/openknoll/oknoll-main) repo.
 
 ## Layout
 
@@ -20,10 +20,11 @@ proprietary reader.
 | `packages/eval` | PD-vs-RAG evaluation harness |
 | `fixtures/` | golden bundles and malformed cases |
 
-Sibling repos (ADR-0006 repo split): [`oknoll-services`](https://github.com/a2kprofile/oknoll-services)
-(GCP control plane: Cloud Run services, pipeline worker, Terraform) and
-[`oknoll-app`](https://github.com/a2kprofile/oknoll-app) (Next.js web app on Vercel).
-Both consume this repo's packages; this repo has no cloud dependency.
+Sibling repos (ADR-0006 repo split, `openknoll` org): [`oknoll-main`](https://github.com/openknoll/oknoll-main)
+(project documents, private), [`oknoll-services`](https://github.com/openknoll/oknoll-services)
+(GCP control plane: Cloud Run services, pipeline worker, Terraform; private), and
+[`oknoll-app`](https://github.com/openknoll/oknoll-app) (Next.js web app on Vercel; private).
+The services consume this repo's packages; this repo has no cloud dependency.
 
 ## Usage
 
@@ -31,7 +32,7 @@ The `oknoll` CLI is fully useful offline and local — no cloud account, no serv
 not on PyPI yet; run it out of a clone with [`uv`](https://docs.astral.sh/uv/):
 
 ```sh
-git clone https://github.com/a2kprofile/oknoll-python.git
+git clone https://github.com/openknoll/oknoll-python.git
 cd oknoll-python && make install     # one-time: sync the uv workspace
 
 # `--project` lets you invoke the CLI from any directory in any later session:
