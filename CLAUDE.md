@@ -10,21 +10,26 @@ system. It ingests documents/websites/repos, normalizes them into a format-neutr
 a deterministic navigation layer (CLI + local MCP). This repo is fully useful offline —
 no cloud account or service.
 
-This is one of three sibling repos (ADR-0006 split of the original `openknoll` monorepo):
-- **oknoll-python** (this repo) — `packages/{okf-core, oknoll-cli, connectors, providers, eval}`,
-  fixtures, docs, scripts. The source of the shared core.
-- **oknoll-services** — GCP side (Cloud Run services, pipeline worker, Terraform). Consumes
-  `okf-core`/`oknoll-connectors` from this repo via pinned git-tag dependencies — tag releases
-  here (`v0.x.y`) when the services need new core behavior.
-- **oknoll-app** — Next.js web app on Vercel; talks to oknoll-services over HTTP only.
+This is one of four sibling repos (ADR-0006 split of the original `openknoll` monorepo,
+all under the `openknoll` GitHub org). **This repo is PUBLIC** — never add internal
+documents, benchmarks over them, credentials, or operational notes here.
+- **oknoll-main** (private) — all project documents: design doc, implementation plan,
+  ADRs, sprint handovers, notes, frozen benchmark.
+- **oknoll-python** (this repo, public) — `packages/{okf-core, oknoll-cli, connectors,
+  providers, eval}`, fixtures, scripts. The source of the shared core.
+- **oknoll-services** (private) — GCP side (Cloud Run services, pipeline worker,
+  Terraform). Consumes `okf-core`/`oknoll-connectors` from this repo via pinned git-tag
+  dependencies — tag releases here (`v0.x.y`) when the services need new core behavior.
+- **oknoll-app** (private) — Next.js web app on Vercel; talks to oknoll-services over
+  HTTP only.
 
-## Authoritative documents
+## Authoritative documents (in the private `openknoll/oknoll-main` repo)
 
-- `docs/openknoll-merged-design-solo.md` — the design source of truth.
-- `docs/implementation-plan.md` — execution plan: phase order with exit gates. Where it
+- `openknoll-merged-design-solo.md` — the design source of truth.
+- `implementation-plan.md` — execution plan: phase order with exit gates. Where it
   deviates from the design (branching only), the plan wins.
-- `docs/adr/` — decision records. Changing a binding decision (design §2 table, CLI
-  surface, etc.) requires an ADR, not a silent code change.
+- `adr/` — decision records. Changing a binding decision (design §2 table, CLI
+  surface, etc.) requires an ADR there, not a silent code change.
 
 ## Non-negotiable constraints
 
@@ -45,8 +50,8 @@ This is one of three sibling repos (ADR-0006 split of the original `openknoll` m
   live in `packages/providers`. All connector network I/O goes through `SafeFetcher`
   (SSRF enforcement). Connectors acquire and normalize only — they never write OKF;
   okf-core owns generation, validation, indexing, packing.
-- **Benchmark a2k-v1 is frozen** (`docs/benchmark/`): questions/gold evidence must not
-  change — a revision means a new spec name (`a2k-v2`).
+- **Benchmark a2k-v1 is frozen** (`benchmark/` in oknoll-main): questions/gold evidence
+  must not change — a revision means a new spec name (`a2k-v2`).
 
 ## Layout
 
