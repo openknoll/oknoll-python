@@ -4,7 +4,8 @@ Functional after Phase 2: `init`, `add`, `build`, `lint`, `pack`, `diff --check`
 Every other command is present so the grammar is frozen from day one, and fails
 with a clear "not yet" error naming the phase that delivers it. Adding or
 renaming a command requires a decision-record update — no aliases from
-superseded designs (sync, validate, explore, export).
+superseded designs (sync, validate, explore, export). `viz` was added to the
+frozen surface 2026-08-09 (link-graph visualization; recorded in CLAUDE.md).
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from okf_core import (
     read_current_revision_id,
     revision_dir,
     write_trace,
+    write_viz,
 )
 from okf_core import __version__ as core_version
 from oknoll_connectors import (
@@ -594,6 +596,23 @@ def pack(
     )
     typer.echo(f"{result.archive_path.relative_to(config.root)}  ({result.file_count} files)")
     typer.echo(f"{result.checksum_path.relative_to(config.root)}  sha256={result.sha256}")
+
+
+@app.command()
+def viz(
+    bundle: Path | None = typer.Option(
+        None, "--bundle", help="Bundle directory (default: the project's bundle)."
+    ),
+    out: Path = typer.Option(Path("viz.html"), "--out", help="Output HTML path."),
+) -> None:
+    """Render the bundle link graph to one self-contained offline HTML file."""
+    if bundle is None:
+        config = _load_project()
+        bundle = config.bundle_path
+    if not bundle.is_dir():
+        raise _fail(f"oknoll viz: bundle directory not found: {bundle}")
+    stats = write_viz(bundle, out, today=date.today().isoformat())
+    typer.echo(f"{out}  ({stats['nodes']} nodes, {stats['edges']} edges, {stats['bytes']} bytes)")
 
 
 @app.command()

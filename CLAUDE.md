@@ -23,8 +23,10 @@ behavior.
 - **Published revisions are immutable.** A rebuild writes a new revision directory and
   atomically advances the current pointer.
 - **The CLI surface is frozen**: `init`, `add`, `build`, `lint`, `ask`,
-  `chat`, `serve --mcp`, `pack`, `diff --check`, `plugin`, `login`, `keys`, `eval`.
-  No aliases from superseded designs (`sync`, `validate`, `explore`, `export`).
+  `chat`, `serve --mcp`, `pack`, `diff --check`, `plugin`, `login`, `keys`, `eval`,
+  `viz` (added 2026-08-09: renders the link graph to one self-contained offline
+  HTML file). No aliases from superseded designs (`sync`, `validate`, `explore`,
+  `export`).
 - **The deterministic explorer and the PD-vs-RAG evaluation are never cut.**
 - **Determinism everywhere:** paths, manifests, checksums, indexes, archives, link graphs.
   Model-generated fields are cached by content hash + prompt version + model ID; model calls
