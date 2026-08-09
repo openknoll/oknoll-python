@@ -47,7 +47,7 @@ from oknoll_providers import ProviderError, load_env
 from oknoll_providers import resolve as resolve_provider_spec
 from oknoll_providers import resolve_embedder as resolve_embedder_spec
 
-from oknoll_cli import conversations, plugins, project
+from oknoll_cli import conversations, global_config, plugins, project
 
 NOT_YET_EXIT = 2
 _GIT_PREFIXES = ("git@", "ssh://")
@@ -88,11 +88,13 @@ def _load_project() -> project.ProjectConfig:
         config = project.load_project(root)
     except project.ProjectError as exc:
         raise _fail(str(exc)) from exc
-    # Project-local .env supplies provider credentials (ANTHROPIC_API_KEY,
-    # OLLAMA_HOST, GITHUB_TOKEN, ...) without ever overriding the real environment.
+    # Provider credentials (ANTHROPIC_API_KEY, OLLAMA_HOST, GITHUB_TOKEN, ...)
+    # layer without ever overriding the real environment: shell env wins, then
+    # the project-local .env, then ~/.oknoll/.env + config.toml.
     try:
         load_env(root)
-    except ProviderError as exc:
+        global_config.apply_global_env()
+    except (ProviderError, global_config.GlobalConfigError) as exc:
         raise _fail(str(exc)) from exc
     return config
 
@@ -134,16 +136,25 @@ def _display_path(path: Path, root: Path) -> str:
         return path.as_posix()
 
 
-def _provider_for(config: project.ProjectConfig, override: str | None = None) -> ModelProvider:
+def _global_defaults() -> global_config.GlobalConfig:
     try:
-        return resolve_provider_spec(override or config.model)
+        return global_config.load_global_config()
+    except global_config.GlobalConfigError as exc:
+        raise _fail(str(exc)) from exc
+
+
+def _provider_for(config: project.ProjectConfig, override: str | None = None) -> ModelProvider:
+    spec = override or config.model or _global_defaults().model or "stub"
+    try:
+        return resolve_provider_spec(spec)
     except (ValueError, ProviderError) as exc:
         raise _fail(str(exc)) from exc
 
 
 def _embedder_for(config: project.ProjectConfig, override: str | None = None) -> EmbeddingProvider:
+    spec = override or config.embedder or _global_defaults().embedder or "stub"
     try:
-        return resolve_embedder_spec(override or config.embedder)
+        return resolve_embedder_spec(spec)
     except (ValueError, ProviderError) as exc:
         raise _fail(str(exc)) from exc
 
@@ -640,7 +651,14 @@ def eval_cmd(
     """Run the PD-vs-RAG descriptive benchmark and write the comparison report."""
     from oknoll_eval import BenchmarkError, load_benchmark, render_report, run_benchmark
 
-    load_env(Path.cwd())
+    # eval takes secrets/endpoints from the env chain but keeps its explicit
+    # "stub" option defaults — benchmark runs never inherit settings from
+    # config files, so a machine default can't silently change a comparison.
+    try:
+        load_env(Path.cwd())
+        global_config.apply_global_env()
+    except (ProviderError, global_config.GlobalConfigError) as exc:
+        raise _fail(f"oknoll eval: {exc}") from exc
     try:
         benchmark = load_benchmark(benchmark_file)
     except BenchmarkError as exc:

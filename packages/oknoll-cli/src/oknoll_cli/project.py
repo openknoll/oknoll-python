@@ -35,8 +35,10 @@ class ProjectConfig:
     name: str
     sources_dir: str = "sources"
     bundle_dir: str = "bundle"
-    model: str = "stub"
-    embedder: str = "stub"
+    # None means "not set in oknoll.toml" — resolution falls through to
+    # ~/.oknoll/config.toml and then the "stub" default (see main._provider_for).
+    model: str | None = None
+    embedder: str | None = None
     strict: bool = False
     sources: list[RegisteredSource] = field(default_factory=list)
 
@@ -77,13 +79,15 @@ def load_project(root: Path) -> ProjectConfig:
         if isinstance(connector, str) and isinstance(uri, str):
             sources.append(RegisteredSource(connector=connector, uri=uri))
 
+    model = build.get("model")
+    embedder = rag.get("embedder")
     return ProjectConfig(
         root=root,
         name=str(project.get("name", root.name)),
         sources_dir=str(paths.get("sources", "sources")),
         bundle_dir=str(paths.get("bundle", "bundle")),
-        model=str(build.get("model", "stub")),
-        embedder=str(rag.get("embedder", "stub")),
+        model=str(model) if model is not None else None,
+        embedder=str(embedder) if embedder is not None else None,
         strict=bool(lint.get("strict", False)),
         sources=sources,
     )
@@ -126,19 +130,21 @@ sources = "sources"
 bundle = "bundle"
 
 [build]
-# Model provider for generation and `oknoll ask`. "stub" is the deterministic
-# CI provider; real providers:
-#   model = "anthropic:claude-opus-5"   # needs ANTHROPIC_API_KEY in .env
+# Model provider for generation and `oknoll ask`. Precedence:
+#   `oknoll ask --model SPEC` > this file > ~/.oknoll/config.toml [build].model > "stub".
+# "stub" is the deterministic CI provider; real providers:
+#   model = "anthropic:claude-opus-5"   # needs ANTHROPIC_API_KEY (.env or ~/.oknoll/.env)
 #   model = "ollama:llama3"             # needs a local `ollama serve`
-# `oknoll ask --model SPEC` overrides this per question.
-model = "stub"
+# Unset here, so the machine default in ~/.oknoll/config.toml applies:
+# model = "stub"
 
 [rag]
-# Embedding provider for `oknoll ask --mode rag` (the vector baseline).
+# Embedding provider for `oknoll ask --mode rag` (the vector baseline). Precedence:
+#   `oknoll ask --embedder SPEC` > this file > ~/.oknoll/config.toml [rag].embedder > "stub".
 # "stub" is the deterministic CI embedder; a real one needs local Ollama:
 #   embedder = "ollama:nomic-embed-text"   # needs a local `ollama serve`
-# `oknoll ask --embedder SPEC` overrides this per question.
-embedder = "stub"
+# Unset here, so the machine default in ~/.oknoll/config.toml applies:
+# embedder = "stub"
 
 [lint]
 strict = false
