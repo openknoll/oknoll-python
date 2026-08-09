@@ -25,8 +25,9 @@ behavior.
 - **The CLI surface is frozen**: `init`, `add`, `build`, `lint`, `ask`,
   `chat`, `serve --mcp`, `pack`, `diff --check`, `plugin`, `login`, `keys`, `eval`,
   `viz` (added 2026-08-09: renders the link graph to one self-contained offline
-  HTML file). No aliases from superseded designs (`sync`, `validate`, `explore`,
-  `export`).
+  HTML file), `config`, `doctor` (added 2026-08-09: machine-level config surface
+  over `~/.oknoll/` — `login`/`keys` stay reserved for the hosted control plane).
+  No aliases from superseded designs (`sync`, `validate`, `explore`, `export`).
 - **The deterministic explorer and the PD-vs-RAG evaluation are never cut.**
 - **Determinism everywhere:** paths, manifests, checksums, indexes, archives, link graphs.
   Model-generated fields are cached by content hash + prompt version + model ID; model calls
@@ -63,6 +64,10 @@ behavior.
   entrypoint — CI reuses them.
 - `make security` runs the release-gate corpora (SSRF + prompt-injection + injected-sources);
   a failure stops a release.
+- Config layering (`oknoll_cli/global_config.py`): settings resolve CLI flag >
+  bundle `oknoll.toml` > `~/.oknoll/config.toml` > `"stub"`; secrets are
+  environment-only (shell > project `.env` > `~/.oknoll/.env`). Secrets never
+  go in any TOML; `oknoll eval` never inherits settings from config files.
 
 ## Branches
 
@@ -80,6 +85,11 @@ Evaluation runs in CI against the deterministic model stub — CI never touches 
 
 Gotchas:
 - Test files across packages need unique basenames (pytest rootdir import mode).
+- The repo-root `conftest.py` pins `OKNOLL_HOME` to a tmp dir and restores
+  `os.environ` after every test — without it, a developer's real `~/.oknoll`
+  (or an env var leaked by `load_env`'s setdefault) would bleed into the suite.
+  It must stay at the root: a second `tests/conftest.py` trips mypy's
+  duplicate-module rule against okf-core's.
 - Exploring a bundle writes derived state into it (`.oknoll/index/...`) — tests must
   `shutil.copytree` a fixture to `tmp_path` before exploring it.
 - macOS: if a long-lived `oknoll` process dies on import with `ModuleNotFoundError`,

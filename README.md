@@ -207,12 +207,40 @@ retrieval condition) under `bundle/.oknoll/traces/` — derived state, never pac
 Bundle text is data: nothing a bundle says can make the explorer follow a link off
 disk, reach the network, or drop a trust warning.
 
+### Configuration
+
+By default `build`/`ask`/`chat` use a deterministic stub model (no network,
+reproducible). Real providers are configured in two separate planes:
+
+- **Settings** (which model/embedder, the Ollama endpoint) resolve
+  *specific beats general*: CLI flag (`ask --model …`) → the bundle's
+  `oknoll.toml` → `~/.oknoll/config.toml` → `stub`.
+- **Secrets** (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`) never live in TOML. They
+  resolve through the environment: shell → `<project>/.env` →
+  `~/.oknoll/.env`, so a project `.env` wins for local development.
+
+Set a machine-wide default once instead of repeating it per bundle:
+
+```sh
+oknoll config set build.model anthropic:claude-opus-5   # or ollama:llama3
+oknoll config set rag.embedder ollama:nomic-embed-text
+oknoll config set providers.ollama.host http://127.0.0.1:11434
+oknoll config list      # effective settings + where each one comes from
+oknoll config get build.model
+oknoll doctor           # home dir, .env permissions, keys present, Ollama liveness
+```
+
+`~/.oknoll/` (relocatable via `OKNOLL_HOME`) holds two files, split like
+`~/.aws`: `config.toml` — machine defaults, no secrets, safe to share — and
+`.env` (`chmod 600`) for keys shared by every bundle on the machine (see
+`.env.example`). A bundle whose `oknoll.toml` sets `[build].model` explicitly
+keeps that choice regardless of the machine default; `oknoll eval` never
+inherits settings from config files (its `--model`/`--embedder` default to the
+stub so benchmark comparisons stay reproducible).
+
 Set `GITHUB_TOKEN` before `oknoll build` to raise GitHub API rate limits for larger
-repositories. By default `build`/`ask`/`chat` use a deterministic stub model (no network,
-reproducible); point them at a real provider with `[build].model` in `oknoll.toml` or
-`oknoll ask --model anthropic:claude-opus-5` / `ollama:<model>` (set `ANTHROPIC_API_KEY`
-or run a local `ollama serve`). `login` and `keys` land with the hosted control plane in
-a later phase and currently exit with a clear "not implemented yet" message.
+repositories. `login` and `keys` land with the hosted control plane in a later phase and
+currently exit with a clear "not implemented yet" message.
 
 ## Development
 
