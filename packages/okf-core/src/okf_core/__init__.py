@@ -49,6 +49,7 @@ from okf_core.provider import (
 )
 from okf_core.rag import EmbeddingProvider, StubEmbeddingProvider, resolve_embedder
 from okf_core.revision import read_current_revision_id, revision_dir
+from okf_core.viz import build_graph, render_html, write_viz
 
 __all__ = [
     "GENERATOR_VERSION",
@@ -85,6 +86,7 @@ __all__ = [
     "StubModelProvider",
     "__version__",
     "answer_question",
+    "build_graph",
     "build_link_graph",
     "build_revision",
     "check_reproducibility",
@@ -94,6 +96,7 @@ __all__ = [
     "pack_bundle",
     "parse_document",
     "read_current_revision_id",
+    "render_html",
     "resolve_embedder",
     "resolve_provider",
     "revision_dir",
@@ -103,4 +106,5 @@ __all__ = [
     "write_document",
     "write_index",
     "write_trace",
+    "write_viz",
 ]

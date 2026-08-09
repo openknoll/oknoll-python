@@ -24,6 +24,7 @@ FROZEN_COMMANDS = {
     "diff",
     "login",
     "eval",
+    "viz",
 }
 FROZEN_GROUPS = {"plugin", "keys"}
 FORBIDDEN = {"sync", "validate", "explore", "export"}
@@ -148,3 +149,20 @@ def test_init_creates_lintable_skeleton(tmp_path: Path) -> None:
     again = runner.invoke(app, ["init", str(tmp_path)])
     assert again.exit_code == 1
     assert "already exists" in _output(again)
+
+
+def test_viz_renders_golden_bundle(tmp_path: Path) -> None:
+    out = tmp_path / "viz.html"
+    result = runner.invoke(
+        app, ["viz", "--bundle", str(FIXTURES / "golden" / "multihop"), "--out", str(out)]
+    )
+    assert result.exit_code == 0, _output(result)
+    assert "4 nodes" in _output(result)
+    assert out.is_file()
+    assert "OKF bundle graph" in out.read_text(encoding="utf-8")
+
+
+def test_viz_missing_bundle_fails(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["viz", "--bundle", str(tmp_path / "nope")])
+    assert result.exit_code == 1
+    assert "not found" in _output(result)
