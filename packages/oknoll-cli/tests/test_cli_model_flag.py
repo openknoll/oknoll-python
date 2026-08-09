@@ -82,7 +82,8 @@ def test_bad_config_model_fails_before_building(
     empty_project: Path,
 ) -> None:
     config_path = empty_project / "oknoll.toml"
-    text = config_path.read_text(encoding="utf-8").replace('model = "stub"', 'model = "bogus"')
+    # The scaffold ships the model line commented out — uncomment it as bogus.
+    text = config_path.read_text(encoding="utf-8").replace('# model = "stub"', 'model = "bogus"')
     config_path.write_text(text, encoding="utf-8")
     result = runner.invoke(app, ["build"])
     assert result.exit_code == 1
