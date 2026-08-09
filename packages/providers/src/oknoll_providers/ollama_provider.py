@@ -36,6 +36,37 @@ def _display_host(host: str) -> str:
     return scheme + sep + authority + slash + tail
 
 
+def ping_ollama(
+    host: str | None = None,
+    *,
+    timeout: float = 2.0,
+    transport: httpx.BaseTransport | None = None,
+) -> str:
+    """Probe ``GET /api/version``; returns the server version or raises ProviderError.
+
+    Used by `oknoll doctor` — a cheap liveness check that never loads a model.
+    """
+    resolved = _normalize_host(host or os.environ.get("OLLAMA_HOST") or DEFAULT_OLLAMA_HOST)
+    try:
+        with httpx.Client(transport=transport, timeout=timeout) as client:
+            response = client.get(f"{resolved}/api/version")
+    except httpx.HTTPError as exc:
+        raise ProviderError(
+            f"cannot reach Ollama at {_display_host(resolved)} — is `ollama serve` running?"
+        ) from exc
+    if response.status_code != 200:
+        raise ProviderError(
+            f"Ollama returned HTTP {response.status_code} from "
+            f"{_display_host(resolved)}/api/version"
+        )
+    try:
+        data = response.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise ProviderError("Ollama returned a response that is not valid JSON") from exc
+    version = data.get("version") if isinstance(data, dict) else None
+    return str(version) if version else "unknown"
+
+
 class OllamaProvider:
     """Bounded text completion via a local Ollama server."""
 

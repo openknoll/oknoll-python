@@ -4,7 +4,7 @@ import contextlib
 from pathlib import Path
 
 import pytest
-from oknoll_cli.main import app, keys_app, plugin_app
+from oknoll_cli.main import app, config_app, keys_app, plugin_app
 from typer.testing import CliRunner
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -25,8 +25,9 @@ FROZEN_COMMANDS = {
     "login",
     "eval",
     "viz",
+    "doctor",
 }
-FROZEN_GROUPS = {"plugin", "keys"}
+FROZEN_GROUPS = {"plugin", "keys", "config"}
 FORBIDDEN = {"sync", "validate", "explore", "export"}
 
 
@@ -48,8 +49,10 @@ def test_command_surface_is_frozen() -> None:
 def test_subcommand_surfaces() -> None:
     plugin = {c.name or c.callback.__name__ for c in plugin_app.registered_commands}  # type: ignore[union-attr]
     keys = {c.name or c.callback.__name__ for c in keys_app.registered_commands}  # type: ignore[union-attr]
+    config = {c.name or c.callback.__name__ for c in config_app.registered_commands}  # type: ignore[union-attr]
     assert plugin == {"list", "inspect", "validate"}
     assert keys == {"create", "list", "revoke"}
+    assert config == {"list", "get", "set", "unset"}
 
 
 def test_stub_commands_fail_clearly() -> None:

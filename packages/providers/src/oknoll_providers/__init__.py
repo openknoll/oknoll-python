@@ -10,7 +10,7 @@ from oknoll_providers.anthropic_provider import DEFAULT_ANTHROPIC_MODEL, Anthrop
 from oknoll_providers.env import load_env
 from oknoll_providers.errors import ProviderError
 from oknoll_providers.ollama_embedder import OllamaEmbedder
-from oknoll_providers.ollama_provider import DEFAULT_OLLAMA_HOST, OllamaProvider
+from oknoll_providers.ollama_provider import DEFAULT_OLLAMA_HOST, OllamaProvider, ping_ollama
 from oknoll_providers.registry import resolve, resolve_embedder
 
 __version__ = "0.1.0"
@@ -24,6 +24,7 @@ __all__ = [
     "ProviderError",
     "__version__",
     "load_env",
+    "ping_ollama",
     "resolve",
     "resolve_embedder",
 ]
