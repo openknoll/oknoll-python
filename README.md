@@ -19,10 +19,17 @@ proprietary reader.
 This repo is fully standalone with no cloud dependency; the hosted OpenKnoll
 platform consumes these packages as pinned git-tag dependencies.
 
-## Usage
+## Install
 
-The `oknoll` CLI is fully useful offline and local — no cloud account, no service. It is
-not on PyPI yet; run it out of a clone with [`uv`](https://docs.astral.sh/uv/):
+The `oknoll` CLI is fully useful offline and local — no cloud account, no service.
+From PyPI (v0.3.0 onward):
+
+```sh
+uv tool install oknoll     # or: pipx install oknoll
+oknoll --help
+```
+
+To hack on it instead, run it out of a clone with [`uv`](https://docs.astral.sh/uv/):
 
 ```sh
 git clone https://github.com/openknoll/oknoll-python.git
@@ -31,9 +38,9 @@ cd oknoll-python && make install     # one-time: sync the uv workspace
 # `--project` lets you invoke the CLI from any directory in any later session:
 REPO="$PWD"
 oknoll() { uv run --no-sync --project "$REPO" oknoll "$@"; }
-
-oknoll --help
 ```
+
+## Usage
 
 ### Demo: documents + a GitHub repo → portable OKF bundle
 
@@ -255,6 +262,15 @@ uv run oknoll --help
 ```
 
 Branches: feature branches off `develop`; `main` is promotion-only.
+
+Releasing (all five packages move in lockstep with the tag):
+
+```sh
+uv run python scripts/bump_version.py 0.4.0   # pyprojects, sibling pins, __version__
+make install && make lint typecheck test      # refresh uv.lock, verify
+# commit, promote develop → main by PR, then:
+git tag v0.4.0 && git push origin v0.4.0      # release.yml gates, builds, publishes
+```
 
 Troubleshooting (macOS): if a long-lived `oknoll` process ever dies on import with
 `ModuleNotFoundError: No module named 'okf_core'`, run `chflags -R nohidden .venv` once —

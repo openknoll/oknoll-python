@@ -64,6 +64,13 @@ behavior.
   entrypoint — CI reuses them.
 - `make security` runs the release-gate corpora (SSRF + prompt-injection + injected-sources);
   a failure stops a release.
+- Releases are tag-driven (`release.yml`): all five packages share one version,
+  moved in lockstep by `scripts/bump_version.py <version>` (pyprojects, exact
+  sibling pins, `__version__` strings) + `make install` to refresh `uv.lock`;
+  the workflow refuses a tag that disagrees with the pyproject versions, then
+  gates, builds (`uv build --all-packages`), publishes via PyPI trusted
+  publishing (environment `pypi`), and cuts a GitHub Release. The CLI's
+  distribution name is `oknoll` (import package stays `oknoll_cli`).
 - Config layering (`oknoll_cli/global_config.py`): settings resolve CLI flag >
   bundle `oknoll.toml` > `~/.oknoll/config.toml` > `"stub"`; secrets are
   environment-only (shell > project `.env` > `~/.oknoll/.env`). Secrets never

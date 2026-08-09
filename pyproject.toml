@@ -18,7 +18,7 @@ members = [
 
 [tool.uv.sources]
 okf-core = { workspace = true }
-oknoll-cli = { workspace = true }
+oknoll = { workspace = true }
 oknoll-connectors = { workspace = true }
 oknoll-providers = { workspace = true }
 oknoll-eval = { workspace = true }
