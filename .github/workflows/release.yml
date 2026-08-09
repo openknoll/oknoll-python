@@ -1,0 +1,95 @@
+name: Release
+
+# Tag-driven PyPI release. Flow: run scripts/bump_version.py, commit, promote
+# develop → main by PR, then `git tag v<version> && git push origin v<version>`.
+# Publishing uses PyPI trusted publishing (OIDC) — each of the five projects
+# (oknoll, okf-core, oknoll-connectors, oknoll-providers, oknoll-eval) must be
+# registered on PyPI with this repo, this workflow file, and environment `pypi`.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Release gate (lint / typecheck / security / test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install workspace
+        run: make install
+      - name: Tag matches the workspace version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for f in packages/*/pyproject.toml; do
+            version=$(grep -m1 '^version = ' "$f" | cut -d'"' -f2)
+            if [ "$version" != "$tag" ]; then
+              echo "::error::$f is at $version but the tag is v$tag — run scripts/bump_version.py $tag and re-tag"
+              exit 1
+            fi
+          done
+      - name: Lint
+        run: make lint
+      - name: Type-check
+        run: make typecheck
+      - name: Security corpora (SSRF + prompt injection)
+        run: make security
+      - name: Test
+        run: make test
+
+  build:
+    name: Build sdists + wheels
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: Build all packages
+        run: uv build --all-packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI (trusted publishing)
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+
+  github-release:
+    name: GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Create release with artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

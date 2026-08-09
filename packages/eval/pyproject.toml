@@ -1,11 +1,12 @@
 [project]
 name = "oknoll-eval"
-version = "0.1.0"
+version = "0.3.0"
 description = "OpenKnoll PD-vs-RAG evaluation harness: corpora, runner, grading, metrics, reports"
 requires-python = ">=3.12"
 license = "Apache-2.0"
+readme = "README.md"
 dependencies = [
-    "okf-core",
+    "okf-core==0.3.0",
 ]
 
 [build-system]
