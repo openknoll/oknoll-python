@@ -1,0 +1,24 @@
+[project]
+name = "oknoll-cli"
+version = "0.1.0"
+description = "oknoll: local-first CLI for building, linting, exploring, and packing OKF bundles"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+    "okf-core",
+    "oknoll-connectors",
+    "oknoll-eval",
+    "oknoll-providers",
+    "typer>=0.15",
+    "mcp>=1.9",
+]
+
+[project.scripts]
+oknoll = "oknoll_cli.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oknoll_cli"]

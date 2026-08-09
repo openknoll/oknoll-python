@@ -1,0 +1,7 @@
+{
+  "expect_codes": [
+    "integrity/duplicate-id"
+  ],
+  "passes_default": false,
+  "passes_strict": false
+}

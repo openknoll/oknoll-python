@@ -1,0 +1,7 @@
+{
+  "expect_codes": [
+    "hygiene/broken-link"
+  ],
+  "passes_default": true,
+  "passes_strict": false
+}

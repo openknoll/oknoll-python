@@ -1,0 +1,31 @@
+name: Weekly regression
+
+# Upstream OKF fixture regression (permissive-consumer posture) plus the full
+# suite on a schedule, so drift in vendored fixtures or dependencies surfaces
+# even when nothing is being merged.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Upstream fixtures + full suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install workspace
+        run: make install
+      - name: Upstream bundle regression
+        run: uv run --no-sync pytest packages/okf-core/tests/test_upstream_bundles.py -v
+      - name: Full suite
+        run: make test
+      - name: Smoke (local CLI, includes build/pack/diff determinism)
+        run: make smoke

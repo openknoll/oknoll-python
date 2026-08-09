@@ -1,0 +1,8 @@
+{
+  "expect_codes": [
+    "integrity/checksum-mismatch",
+    "integrity/manifest-missing-file"
+  ],
+  "passes_default": false,
+  "passes_strict": false
+}

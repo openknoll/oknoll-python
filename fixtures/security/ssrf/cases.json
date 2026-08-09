@@ -1,0 +1,52 @@
+{
+  "description": "SSRF corpus: URLs the SafeFetcher must refuse before any connection is made, plus positive controls that must stay fetchable. The `dns` map is the deterministic resolver used by the test suite; hosts not listed resolve to the public control address 93.184.216.34.",
+  "dns": {
+    "localhost": ["127.0.0.1"],
+    "sub.localhost": ["127.0.0.1"],
+    "metadata.google.internal": ["169.254.169.254"],
+    "rebind.attacker.example": ["93.184.216.34", "10.0.0.1"],
+    "internal.corp.example": ["192.168.10.10"],
+    "ipv6-internal.example": ["fd00::1"]
+  },
+  "blocked": [
+    { "url": "file:///etc/passwd", "category": "scheme" },
+    { "url": "ftp://example.com/file", "category": "scheme" },
+    { "url": "gopher://example.com/", "category": "scheme" },
+    { "url": "dict://example.com:11211/", "category": "scheme" },
+    { "url": "http://user:pass@example.com/", "category": "userinfo" },
+    { "url": "https://trusted.example@example.com/", "category": "userinfo" },
+    { "url": "http://127.0.0.1/", "category": "loopback" },
+    { "url": "http://127.0.0.53:8080/", "category": "loopback" },
+    { "url": "http://[::1]/", "category": "loopback" },
+    { "url": "http://localhost/", "category": "loopback-dns" },
+    { "url": "http://sub.localhost/admin", "category": "loopback-dns" },
+    { "url": "http://10.0.0.8/", "category": "private" },
+    { "url": "http://172.16.5.4/", "category": "private" },
+    { "url": "http://192.168.1.1/router", "category": "private" },
+    { "url": "http://192.168.0.1:8443/", "category": "private" },
+    { "url": "http://internal.corp.example/", "category": "private-dns" },
+    { "url": "http://[fd00::1]/", "category": "private" },
+    { "url": "http://ipv6-internal.example/", "category": "private-dns" },
+    { "url": "http://169.254.169.254/latest/meta-data/", "category": "metadata" },
+    { "url": "http://169.254.169.254/latest/api/token", "category": "metadata" },
+    { "url": "http://metadata.google.internal/computeMetadata/v1/", "category": "metadata-dns" },
+    { "url": "http://[fe80::1]/", "category": "link-local" },
+    { "url": "http://0.0.0.0/", "category": "unspecified" },
+    { "url": "http://2130706433/", "category": "encoded-ip" },
+    { "url": "http://0x7f000001/", "category": "encoded-ip" },
+    { "url": "http://017700000001/", "category": "encoded-ip" },
+    { "url": "http://127.1/", "category": "encoded-ip" },
+    { "url": "http://[::ffff:127.0.0.1]/", "category": "encoded-ip" },
+    { "url": "http://[::ffff:7f00:1]/", "category": "encoded-ip" },
+    { "url": "http://rebind.attacker.example/", "category": "dns-rebinding" },
+    { "url": "http://100.64.0.1/", "category": "shared-cgnat" },
+    { "url": "http://240.0.0.1/", "category": "reserved" },
+    { "url": "http://198.18.0.5/", "category": "benchmarking" }
+  ],
+  "allowed": [
+    { "url": "https://example.com/" },
+    { "url": "http://example.com/page?q=1" },
+    { "url": "http://93.184.216.34/" },
+    { "url": "https://example.com:8443/api" }
+  ]
+}

@@ -1,0 +1,69 @@
+[project]
+name = "oknoll-python-workspace"
+version = "0.1.0"
+description = "OpenKnoll Python workspace root: okf-core + oknoll CLI (not a distributable package)"
+requires-python = ">=3.12"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "packages/okf-core",
+    "packages/oknoll-cli",
+    "packages/connectors",
+    "packages/providers",
+    "packages/eval",
+]
+
+[tool.uv.sources]
+okf-core = { workspace = true }
+oknoll-cli = { workspace = true }
+oknoll-connectors = { workspace = true }
+oknoll-providers = { workspace = true }
+oknoll-eval = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "types-pyyaml>=6.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Typer's declarative CLI idiom requires function calls in argument defaults.
+"packages/oknoll-cli/src/oknoll_cli/main.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+mypy_path = [
+    "packages/okf-core/src",
+    "packages/oknoll-cli/src",
+    "packages/connectors/src",
+    "packages/providers/src",
+    "packages/eval/src",
+]
+
+[[tool.mypy.overrides]]
+module = ["yaml", "yaml.*"]
+ignore_missing_imports = false
+
+[tool.pytest.ini_options]
+testpaths = [
+    "packages/okf-core/tests",
+    "packages/oknoll-cli/tests",
+    "packages/connectors/tests",
+    "packages/providers/tests",
+    "packages/eval/tests",
+]
+addopts = "-q"
