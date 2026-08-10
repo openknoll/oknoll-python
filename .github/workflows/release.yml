@@ -1,0 +1,116 @@
+name: Release
+
+# Tag-driven PyPI release. Flow: run scripts/bump_version.py, commit, promote
+# develop → main by PR, then `git tag v<version> && git push origin v<version>`.
+# Publishing uses PyPI trusted publishing (OIDC). Each of the five projects is
+# registered on PyPI with this repo, this workflow file, and its own GitHub
+# environment `pypi-<dist>` — per-package environments because PyPI requires
+# *pending* trusted publishers (projects that don't exist yet) to have unique
+# configurations; a shared environment would collide. The environments are
+# auto-created by the first run; no repo-side setup or secrets needed.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Release gate (lint / typecheck / security / test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install workspace
+        run: make install
+      - name: Tag matches the workspace version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for f in packages/*/pyproject.toml; do
+            version=$(grep -m1 '^version = ' "$f" | cut -d'"' -f2)
+            if [ "$version" != "$tag" ]; then
+              echo "::error::$f is at $version but the tag is v$tag — run scripts/bump_version.py $tag and re-tag"
+              exit 1
+            fi
+          done
+      - name: Lint
+        run: make lint
+      - name: Type-check
+        run: make typecheck
+      - name: Security corpora (SSRF + prompt injection)
+        run: make security
+      - name: Test
+        run: make test
+
+  build:
+    name: Build sdists + wheels
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: Build all packages
+        run: uv build --all-packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: "Publish ${{ matrix.dist }} to PyPI (trusted publishing)"
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # dist_prefix is the normalized filename stem uv build produces;
+          # `oknoll-*` cannot match the others because they continue with `_`.
+          - { dist: okf-core, dist_prefix: okf_core }
+          - { dist: oknoll-connectors, dist_prefix: oknoll_connectors }
+          - { dist: oknoll-providers, dist_prefix: oknoll_providers }
+          - { dist: oknoll-eval, dist_prefix: oknoll_eval }
+          - { dist: oknoll, dist_prefix: oknoll }
+    environment: "pypi-${{ matrix.dist }}"
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Select this package's artifacts
+        run: |
+          mkdir upload
+          cp dist/${{ matrix.dist_prefix }}-*.tar.gz dist/${{ matrix.dist_prefix }}-*.whl upload/
+          ls upload/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: upload/
+          skip-existing: true # reruns after a partial release stay idempotent
+          verbose: true
+
+  github-release:
+    name: GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Create release with artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

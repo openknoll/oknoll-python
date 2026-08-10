@@ -4,7 +4,8 @@ Functional after Phase 2: `init`, `add`, `build`, `lint`, `pack`, `diff --check`
 Every other command is present so the grammar is frozen from day one, and fails
 with a clear "not yet" error naming the phase that delivers it. Adding or
 renaming a command requires a decision-record update — no aliases from
-superseded designs (sync, validate, explore, export).
+superseded designs (sync, validate, explore, export). `viz` was added to the
+frozen surface 2026-08-09 (link-graph visualization; recorded in CLAUDE.md).
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from okf_core import (
     read_current_revision_id,
     revision_dir,
     write_trace,
+    write_viz,
 )
 from okf_core import __version__ as core_version
 from oknoll_connectors import (
@@ -43,11 +45,11 @@ from oknoll_connectors import (
     parse_github_source,
 )
 from oknoll_connectors.fetch import canonicalize_url
-from oknoll_providers import ProviderError, load_env
+from oknoll_providers import ProviderError, load_env, ping_ollama
 from oknoll_providers import resolve as resolve_provider_spec
 from oknoll_providers import resolve_embedder as resolve_embedder_spec
 
-from oknoll_cli import conversations, plugins, project
+from oknoll_cli import conversations, global_config, plugins, project
 
 NOT_YET_EXIT = 2
 _GIT_PREFIXES = ("git@", "ssh://")
@@ -62,8 +64,12 @@ plugin_app = typer.Typer(
     help="List, inspect, and validate installed connectors.", no_args_is_help=True
 )
 keys_app = typer.Typer(help="Manage API keys for headless automation.", no_args_is_help=True)
+config_app = typer.Typer(
+    help="Inspect and set machine-level configuration (~/.oknoll).", no_args_is_help=True
+)
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(keys_app, name="keys")
+app.add_typer(config_app, name="config")
 
 
 def _not_yet(command: str, phase: str) -> None:
@@ -88,11 +94,13 @@ def _load_project() -> project.ProjectConfig:
         config = project.load_project(root)
     except project.ProjectError as exc:
         raise _fail(str(exc)) from exc
-    # Project-local .env supplies provider credentials (ANTHROPIC_API_KEY,
-    # OLLAMA_HOST, GITHUB_TOKEN, ...) without ever overriding the real environment.
+    # Provider credentials (ANTHROPIC_API_KEY, OLLAMA_HOST, GITHUB_TOKEN, ...)
+    # layer without ever overriding the real environment: shell env wins, then
+    # the project-local .env, then ~/.oknoll/.env + config.toml.
     try:
         load_env(root)
-    except ProviderError as exc:
+        global_config.apply_global_env()
+    except (ProviderError, global_config.GlobalConfigError) as exc:
         raise _fail(str(exc)) from exc
     return config
 
@@ -134,16 +142,25 @@ def _display_path(path: Path, root: Path) -> str:
         return path.as_posix()
 
 
-def _provider_for(config: project.ProjectConfig, override: str | None = None) -> ModelProvider:
+def _global_defaults() -> global_config.GlobalConfig:
     try:
-        return resolve_provider_spec(override or config.model)
+        return global_config.load_global_config()
+    except global_config.GlobalConfigError as exc:
+        raise _fail(str(exc)) from exc
+
+
+def _provider_for(config: project.ProjectConfig, override: str | None = None) -> ModelProvider:
+    spec = override or config.model or _global_defaults().model or "stub"
+    try:
+        return resolve_provider_spec(spec)
     except (ValueError, ProviderError) as exc:
         raise _fail(str(exc)) from exc
 
 
 def _embedder_for(config: project.ProjectConfig, override: str | None = None) -> EmbeddingProvider:
+    spec = override or config.embedder or _global_defaults().embedder or "stub"
     try:
-        return resolve_embedder_spec(override or config.embedder)
+        return resolve_embedder_spec(spec)
     except (ValueError, ProviderError) as exc:
         raise _fail(str(exc)) from exc
 
@@ -586,6 +603,23 @@ def pack(
 
 
 @app.command()
+def viz(
+    bundle: Path | None = typer.Option(
+        None, "--bundle", help="Bundle directory (default: the project's bundle)."
+    ),
+    out: Path = typer.Option(Path("viz.html"), "--out", help="Output HTML path."),
+) -> None:
+    """Render the bundle link graph to one self-contained offline HTML file."""
+    if bundle is None:
+        config = _load_project()
+        bundle = config.bundle_path
+    if not bundle.is_dir():
+        raise _fail(f"oknoll viz: bundle directory not found: {bundle}")
+    stats = write_viz(bundle, out, today=date.today().isoformat())
+    typer.echo(f"{out}  ({stats['nodes']} nodes, {stats['edges']} edges, {stats['bytes']} bytes)")
+
+
+@app.command()
 def diff(
     check: bool = typer.Option(
         False, "--check", help="Rebuild to temp and report reproducibility drift."
@@ -622,6 +656,179 @@ def login() -> None:
     _not_yet("login", "the hosted control plane")
 
 
+def _bundle_settings() -> tuple[str | None, str | None]:
+    """Bundle-declared model/embedder when inside a project; env layers applied either way."""
+    if project.find_project_root(Path.cwd()) is None:
+        try:
+            global_config.apply_global_env()
+        except (ProviderError, global_config.GlobalConfigError) as exc:
+            raise _fail(str(exc)) from exc
+        return None, None
+    config = _load_project()
+    return config.model, config.embedder
+
+
+def _effective_settings() -> list[global_config.EffectiveSetting]:
+    bundle_model, bundle_embedder = _bundle_settings()
+    try:
+        return global_config.effective_settings(bundle_model, bundle_embedder)
+    except global_config.GlobalConfigError as exc:
+        raise _fail(str(exc)) from exc
+
+
+_SETTING_KEYS_HELP = "One of: " + ", ".join(global_config.SETTINGS)
+
+
+@config_app.command("list")
+def config_list() -> None:
+    """Show the effective settings and where each one comes from."""
+    for row in _effective_settings():
+        typer.echo(f"{row.key:24} {row.value:36} {row.source}")
+
+
+@config_app.command("get")
+def config_get(key: str = typer.Argument(..., help=_SETTING_KEYS_HELP)) -> None:
+    """Print one effective value (script-friendly)."""
+    if key not in global_config.SETTINGS:
+        raise _fail(f"unknown setting {key!r} — available: {', '.join(global_config.SETTINGS)}")
+    typer.echo(next(row.value for row in _effective_settings() if row.key == key))
+
+
+@config_app.command("set")
+def config_set(
+    key: str = typer.Argument(..., help=_SETTING_KEYS_HELP),
+    value: str = typer.Argument(..., help="The value to store."),
+) -> None:
+    """Write one machine-level default to ~/.oknoll/config.toml (a bundle's toml still wins)."""
+    try:
+        path = global_config.set_setting(key, value)
+    except global_config.GlobalConfigError as exc:
+        raise _fail(str(exc)) from exc
+    typer.secho(f"{key} = {value.strip()}  ({global_config.display(path)})", fg=typer.colors.GREEN)
+
+
+@config_app.command("unset")
+def config_unset(key: str = typer.Argument(..., help=_SETTING_KEYS_HELP)) -> None:
+    """Remove one machine-level default from ~/.oknoll/config.toml."""
+    try:
+        removed = global_config.unset_setting(key)
+    except global_config.GlobalConfigError as exc:
+        raise _fail(str(exc)) from exc
+    if removed:
+        typer.secho(f"{key} removed", fg=typer.colors.GREEN)
+    else:
+        typer.secho(f"{key} was not set", fg=typer.colors.YELLOW)
+
+
+@app.command()
+def doctor() -> None:
+    """Check the machine setup: ~/.oknoll, secrets, providers, project wiring."""
+    problems = 0
+
+    def ok(message: str) -> None:
+        typer.echo(f"  ok    {message}")
+
+    def warn(message: str) -> None:
+        typer.secho(f"  warn  {message}", fg=typer.colors.YELLOW)
+
+    def fail(message: str) -> None:
+        nonlocal problems
+        problems += 1
+        typer.secho(f"  FAIL  {message}", fg=typer.colors.RED)
+
+    home = global_config.oknoll_home()
+    note = "" if home.is_dir() else " (not created yet — `oknoll config set` creates it)"
+    ok(f"oknoll home: {global_config.display(home)}{note}")
+
+    config: global_config.GlobalConfig | None
+    try:
+        config = global_config.load_global_config()
+    except global_config.GlobalConfigError as exc:
+        config = None
+        fail(str(exc))
+
+    root = project.find_project_root(Path.cwd())
+    bundle_model: str | None = None
+    bundle_embedder: str | None = None
+    if root is None:
+        ok("project: none (not inside a bundle — machine-level checks only)")
+    else:
+        try:
+            project_config = project.load_project(root)
+            bundle_model = project_config.model
+            bundle_embedder = project_config.embedder
+            ok(f"project: {project_config.name} ({global_config.display(root)})")
+        except project.ProjectError as exc:
+            fail(str(exc))
+
+    # Env layering in the same order every command uses: project .env first,
+    # then ~/.oknoll/.env + config.toml defaults.
+    try:
+        if root is not None:
+            load_env(root)
+        if config is not None:
+            global_config.apply_global_env()
+    except (ProviderError, global_config.GlobalConfigError) as exc:
+        fail(str(exc))
+
+    env_paths = ([root / ".env"] if root is not None else []) + [home / ".env"]
+    for env_path in env_paths:
+        if not env_path.is_file():
+            continue
+        mode = env_path.stat().st_mode & 0o777
+        if mode & 0o077:
+            warn(
+                f"{global_config.display(env_path)} is readable by other users "
+                f"(mode {mode:o}) — run `chmod 600 {env_path}`"
+            )
+        else:
+            ok(f"{global_config.display(env_path)}: present (mode {mode:o})")
+
+    if config is not None:
+        rows = {
+            row.key: row for row in global_config.effective_settings(bundle_model, bundle_embedder)
+        }
+        for row in rows.values():
+            error = global_config.SETTINGS[row.key][1](row.value)
+            if error is not None:
+                fail(f"{row.key} = {row.value!r} ({row.source}): {error}")
+            else:
+                ok(f"{row.key} = {row.value}  ({row.source})")
+
+        model_value = rows["build.model"].value
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            ok("ANTHROPIC_API_KEY: set")
+        elif model_value.partition(":")[0] == "anthropic":
+            fail(
+                f"ANTHROPIC_API_KEY: not set — required by model {model_value!r}; "
+                f"add it to the project .env or {global_config.display(home / '.env')}"
+            )
+        else:
+            ok("ANTHROPIC_API_KEY: not set (only needed for anthropic models)")
+        github = "set" if os.environ.get("GITHUB_TOKEN") else "not set (optional — GitHub sources)"
+        ok(f"GITHUB_TOKEN: {github}")
+
+        host_row = rows["providers.ollama.host"]
+        needs_ollama = model_value.startswith("ollama:") or rows["rag.embedder"].value.startswith(
+            "ollama:"
+        )
+        if needs_ollama or host_row.source != "default":
+            try:
+                version = ping_ollama(host_row.value)
+                ok(f"ollama: reachable at {host_row.value} (server version {version})")
+            except ProviderError as exc:
+                if needs_ollama:
+                    fail(str(exc))
+                else:
+                    warn(str(exc))
+        else:
+            ok("ollama: not configured (stub providers everywhere)")
+
+    if problems:
+        raise _fail(f"doctor: {problems} problem(s) found")
+    typer.secho("doctor: all checks passed", fg=typer.colors.GREEN)
+
+
 @app.command(name="eval")
 def eval_cmd(
     benchmark_file: Path = typer.Argument(
@@ -640,7 +847,14 @@ def eval_cmd(
     """Run the PD-vs-RAG descriptive benchmark and write the comparison report."""
     from oknoll_eval import BenchmarkError, load_benchmark, render_report, run_benchmark
 
-    load_env(Path.cwd())
+    # eval takes secrets/endpoints from the env chain but keeps its explicit
+    # "stub" option defaults — benchmark runs never inherit settings from
+    # config files, so a machine default can't silently change a comparison.
+    try:
+        load_env(Path.cwd())
+        global_config.apply_global_env()
+    except (ProviderError, global_config.GlobalConfigError) as exc:
+        raise _fail(f"oknoll eval: {exc}") from exc
     try:
         benchmark = load_benchmark(benchmark_file)
     except BenchmarkError as exc:

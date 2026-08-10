@@ -19,10 +19,17 @@ proprietary reader.
 This repo is fully standalone with no cloud dependency; the hosted OpenKnoll
 platform consumes these packages as pinned git-tag dependencies.
 
-## Usage
+## Install
 
-The `oknoll` CLI is fully useful offline and local — no cloud account, no service. It is
-not on PyPI yet; run it out of a clone with [`uv`](https://docs.astral.sh/uv/):
+The `oknoll` CLI is fully useful offline and local — no cloud account, no service.
+From PyPI (v0.3.0 onward):
+
+```sh
+uv tool install oknoll     # or: pipx install oknoll
+oknoll --help
+```
+
+To hack on it instead, run it out of a clone with [`uv`](https://docs.astral.sh/uv/):
 
 ```sh
 git clone https://github.com/openknoll/oknoll-python.git
@@ -31,9 +38,9 @@ cd oknoll-python && make install     # one-time: sync the uv workspace
 # `--project` lets you invoke the CLI from any directory in any later session:
 REPO="$PWD"
 oknoll() { uv run --no-sync --project "$REPO" oknoll "$@"; }
-
-oknoll --help
 ```
+
+## Usage
 
 ### Demo: documents + a GitHub repo → portable OKF bundle
 
@@ -207,12 +214,40 @@ retrieval condition) under `bundle/.oknoll/traces/` — derived state, never pac
 Bundle text is data: nothing a bundle says can make the explorer follow a link off
 disk, reach the network, or drop a trust warning.
 
+### Configuration
+
+By default `build`/`ask`/`chat` use a deterministic stub model (no network,
+reproducible). Real providers are configured in two separate planes:
+
+- **Settings** (which model/embedder, the Ollama endpoint) resolve
+  *specific beats general*: CLI flag (`ask --model …`) → the bundle's
+  `oknoll.toml` → `~/.oknoll/config.toml` → `stub`.
+- **Secrets** (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`) never live in TOML. They
+  resolve through the environment: shell → `<project>/.env` →
+  `~/.oknoll/.env`, so a project `.env` wins for local development.
+
+Set a machine-wide default once instead of repeating it per bundle:
+
+```sh
+oknoll config set build.model anthropic:claude-opus-5   # or ollama:llama3
+oknoll config set rag.embedder ollama:nomic-embed-text
+oknoll config set providers.ollama.host http://127.0.0.1:11434
+oknoll config list      # effective settings + where each one comes from
+oknoll config get build.model
+oknoll doctor           # home dir, .env permissions, keys present, Ollama liveness
+```
+
+`~/.oknoll/` (relocatable via `OKNOLL_HOME`) holds two files, split like
+`~/.aws`: `config.toml` — machine defaults, no secrets, safe to share — and
+`.env` (`chmod 600`) for keys shared by every bundle on the machine (see
+`.env.example`). A bundle whose `oknoll.toml` sets `[build].model` explicitly
+keeps that choice regardless of the machine default; `oknoll eval` never
+inherits settings from config files (its `--model`/`--embedder` default to the
+stub so benchmark comparisons stay reproducible).
+
 Set `GITHUB_TOKEN` before `oknoll build` to raise GitHub API rate limits for larger
-repositories. By default `build`/`ask`/`chat` use a deterministic stub model (no network,
-reproducible); point them at a real provider with `[build].model` in `oknoll.toml` or
-`oknoll ask --model anthropic:claude-opus-5` / `ollama:<model>` (set `ANTHROPIC_API_KEY`
-or run a local `ollama serve`). `login` and `keys` land with the hosted control plane in
-a later phase and currently exit with a clear "not implemented yet" message.
+repositories. `login` and `keys` land with the hosted control plane in a later phase and
+currently exit with a clear "not implemented yet" message.
 
 ## Development
 
@@ -227,6 +262,15 @@ uv run oknoll --help
 ```
 
 Branches: feature branches off `develop`; `main` is promotion-only.
+
+Releasing (all five packages move in lockstep with the tag):
+
+```sh
+uv run python scripts/bump_version.py 0.4.0   # pyprojects, sibling pins, __version__
+make install && make lint typecheck test      # refresh uv.lock, verify
+# commit, promote develop → main by PR, then:
+git tag v0.4.0 && git push origin v0.4.0      # release.yml gates, builds, publishes
+```
 
 Troubleshooting (macOS): if a long-lived `oknoll` process ever dies on import with
 `ModuleNotFoundError: No module named 'okf_core'`, run `chflags -R nohidden .venv` once —
