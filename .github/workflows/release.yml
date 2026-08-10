@@ -2,9 +2,12 @@ name: Release
 
 # Tag-driven PyPI release. Flow: run scripts/bump_version.py, commit, promote
 # develop → main by PR, then `git tag v<version> && git push origin v<version>`.
-# Publishing uses PyPI trusted publishing (OIDC) — each of the five projects
-# (oknoll, okf-core, oknoll-connectors, oknoll-providers, oknoll-eval) must be
-# registered on PyPI with this repo, this workflow file, and environment `pypi`.
+# Publishing uses PyPI trusted publishing (OIDC). Each of the five projects is
+# registered on PyPI with this repo, this workflow file, and its own GitHub
+# environment `pypi-<dist>` — per-package environments because PyPI requires
+# *pending* trusted publishers (projects that don't exist yet) to have unique
+# configurations; a shared environment would collide. The environments are
+# auto-created by the first run; no repo-side setup or secrets needed.
 
 on:
   push:
@@ -59,10 +62,21 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish to PyPI (trusted publishing)
+    name: "Publish ${{ matrix.dist }} to PyPI (trusted publishing)"
     needs: build
     runs-on: ubuntu-latest
-    environment: pypi
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # dist_prefix is the normalized filename stem uv build produces;
+          # `oknoll-*` cannot match the others because they continue with `_`.
+          - { dist: okf-core, dist_prefix: okf_core }
+          - { dist: oknoll-connectors, dist_prefix: oknoll_connectors }
+          - { dist: oknoll-providers, dist_prefix: oknoll_providers }
+          - { dist: oknoll-eval, dist_prefix: oknoll_eval }
+          - { dist: oknoll, dist_prefix: oknoll }
+    environment: "pypi-${{ matrix.dist }}"
     permissions:
       id-token: write
     steps:
@@ -70,8 +84,15 @@ jobs:
         with:
           name: dist
           path: dist/
+      - name: Select this package's artifacts
+        run: |
+          mkdir upload
+          cp dist/${{ matrix.dist_prefix }}-*.tar.gz dist/${{ matrix.dist_prefix }}-*.whl upload/
+          ls upload/
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          packages-dir: upload/
+          skip-existing: true # reruns after a partial release stay idempotent
           verbose: true
 
   github-release:

@@ -69,8 +69,9 @@ behavior.
   sibling pins, `__version__` strings) + `make install` to refresh `uv.lock`;
   the workflow refuses a tag that disagrees with the pyproject versions, then
   gates, builds (`uv build --all-packages`), publishes via PyPI trusted
-  publishing (environment `pypi`), and cuts a GitHub Release. The CLI's
-  distribution name is `oknoll` (import package stays `oknoll_cli`).
+  publishing (one job per package, environment `pypi-<dist>` — PyPI requires
+  pending publishers to have unique configs), and cuts a GitHub Release. The
+  CLI's distribution name is `oknoll` (import package stays `oknoll_cli`).
 - Config layering (`oknoll_cli/global_config.py`): settings resolve CLI flag >
   bundle `oknoll.toml` > `~/.oknoll/config.toml` > `"stub"`; secrets are
   environment-only (shell > project `.env` > `~/.oknoll/.env`). Secrets never
