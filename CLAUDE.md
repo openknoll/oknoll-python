@@ -84,6 +84,18 @@ Two long-lived branches: `develop` (integration) and `main` (promoted only by PR
 Standing preference: when a feature branch is complete and checks are green, merge into
 `develop` (`git merge --no-ff`), re-run `make test` on `develop`, and push.
 
+## Local agent state & worktrees
+
+- `.agents/` (gitignored) is local planning space — `plans/` for design/task/
+  implementation plans, `handovers/` for session-to-session memory. Never commit
+  it or reference it from committed code or docs. It exists only in the main
+  checkout: agents in a worktree read/write the main checkout's `.agents/` by
+  path, never a copy.
+- In-repo worktrees live under `.claude/worktrees/` (gitignored). A fresh
+  worktree must run `make install` for its own `.venv` — never copy a venv
+  (scripts hardcode absolute paths). `.worktreeinclude` carries `.env` and
+  `.claude/settings.local.json` into new worktrees.
+
 ## Testing expectations
 
 Golden fixtures are the backbone: frozen inputs → expected trees/reports/checksums in

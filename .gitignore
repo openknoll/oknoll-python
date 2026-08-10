@@ -35,3 +35,11 @@ crash.log
 .DS_Store
 .idea/
 .vscode/
+
+# Claude Code / agent tooling (local-only, never committed)
+.claude/worktrees/
+.claude/settings.local.json
+.worktreeinclude
+
+# Local agent planning state (plans, handovers, task memory) — never shared
+.agents/
