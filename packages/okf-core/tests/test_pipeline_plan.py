@@ -15,6 +15,7 @@ from okf_core import (
     Block,
     BuildOutcome,
     CanonicalDoc,
+    PipelineError,
     PipelineSource,
     SourceRef,
     StubModelProvider,
@@ -285,6 +286,46 @@ def test_no_related_section_without_a_match(tmp_path: Path) -> None:
     outcome = _build(tmp_path, StubModelProvider())
     body = _read(tmp_path, outcome, "concepts/wire-protocol-spec.md")
     assert "# Related" not in body
+
+
+# -- failure resilience ------------------------------------------------------
+
+
+class FlakyProvider(ScriptedProvider):
+    """Fails concept-description for one title (a refused model call) until told
+    otherwise."""
+
+    def __init__(self, plan_reply: str, fail_title: str) -> None:
+        super().__init__(plan_reply)
+        self.fail_title = fail_title
+
+    def complete(self, prompt_id: str, payload: dict[str, Any]) -> str:
+        if prompt_id == "concept-description" and payload.get("title") == self.fail_title:
+            self.calls.append(prompt_id)
+            raise RuntimeError("the model declined this request (category: cyber)")
+        return super().complete(prompt_id, payload)
+
+
+def test_failed_build_keeps_cache_so_retry_is_incremental(tmp_path: Path) -> None:
+    _write_sources(tmp_path, {"guide.md": GUIDE_MD, "spec.md": SPEC_MD})
+    provider = FlakyProvider(json.dumps(SPLIT_PLAN), fail_title="Frame Encoding")
+
+    # The error names the document whose generation failed.
+    with pytest.raises(PipelineError, match="concept-description failed for 'Frame Encoding'"):
+        _build(tmp_path, provider)
+
+    # Everything that succeeded before the failure survived to disk.
+    cache_file = tmp_path / "bundle" / ".oknoll" / "cache" / "build-cache.json"
+    assert cache_file.is_file()
+    assert "concepts" in cache_file.read_text(encoding="utf-8")
+
+    # The retry replays every cached decision and re-asks only for the one
+    # field that never succeeded.
+    calls_before = len(provider.calls)
+    provider.fail_title = ""
+    outcome = _build(tmp_path, provider)
+    assert outcome.published
+    assert len(provider.calls) - calls_before == 1
 
 
 # -- generation_version knob -------------------------------------------------
