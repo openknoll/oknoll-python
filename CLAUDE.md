@@ -30,8 +30,12 @@ behavior.
   No aliases from superseded designs (`sync`, `validate`, `explore`, `export`).
 - **The deterministic explorer and the PD-vs-RAG evaluation are never cut.**
 - **Determinism everywhere:** paths, manifests, checksums, indexes, archives, link graphs.
-  Model-generated fields are cached by content hash + prompt version + model ID; model calls
-  sit behind a provider interface with a deterministic stub for CI.
+  Model-generated fields (concept plans and descriptions) are cached by content hash +
+  prompt version + model ID + the project's `[build].generation_version` (the deliberate
+  regeneration knob); model calls sit behind a provider interface with a deterministic
+  stub for CI. The concept planner's decisions are bounded and validated: the model only
+  groups outline sections and names the groups — unusable output falls back to one
+  concept per document, and the fallback is cached so `diff --check` stays green.
 - **OKF posture:** strict producer, permissive consumer — tolerate unknown types/keys in
   others' bundles and preserve unknown fields on round trips.
 - **Security invariants:** bundle text is untrusted data — it never triggers tools or
@@ -83,6 +87,18 @@ Two long-lived branches: `develop` (integration) and `main` (promoted only by PR
 `develop`). Feature branches come off `develop`; never commit to `main` directly.
 Standing preference: when a feature branch is complete and checks are green, merge into
 `develop` (`git merge --no-ff`), re-run `make test` on `develop`, and push.
+
+## Local agent state & worktrees
+
+- `.agents/` (gitignored) is local planning space — `plans/` for design/task/
+  implementation plans, `handovers/` for session-to-session memory. Never commit
+  it or reference it from committed code or docs. It exists only in the main
+  checkout: agents in a worktree read/write the main checkout's `.agents/` by
+  path, never a copy.
+- In-repo worktrees live under `.claude/worktrees/` (gitignored). A fresh
+  worktree must run `make install` for its own `.venv` — never copy a venv
+  (scripts hardcode absolute paths). `.worktreeinclude` carries `.env` and
+  `.claude/settings.local.json` into new worktrees.
 
 ## Testing expectations
 

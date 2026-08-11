@@ -25,11 +25,17 @@ from okf_core import bundle as bundle_mod
 from okf_core import indexing
 from okf_core._version import __version__ as core_version
 from okf_core.cache import BuildCache
-from okf_core.canonical import Block, CanonicalDoc, SourceRef
+from okf_core.canonical import Block, CanonicalDoc, SourceRef, sha256_hex
 from okf_core.findings import LintReport
 from okf_core.frontmatter import Frontmatter, ParsedDocument, write_document
 from okf_core.lint import lint_bundle
-from okf_core.provider import GENERATOR_VERSION, ModelProvider, generation_cache_key
+from okf_core.provider import (
+    DEFAULT_GENERATION_VERSION,
+    GENERATOR_VERSION,
+    ModelProvider,
+    generation_cache_key,
+    generation_timestamp_key,
+)
 from okf_core.revision import (
     compare_trees,
     compute_revision_id,
@@ -148,6 +154,9 @@ def _slugify(text: str) -> str:
 
 _MD_LINK_RE = re.compile(r"!?\[(?P<text>[^\]]*)\]\([^)]*\)")
 _FOOTNOTE_TOKEN_RE = re.compile(r"\[\^[^\]]+\]:?")
+# A concept-plan reply wrapped in a Markdown code fence still parses; anything
+# else non-JSON falls back to one concept per document.
+_FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*\n(.*)\n```$", re.DOTALL)
 
 
 def _strip_links(text: str) -> str:
@@ -176,6 +185,17 @@ DIGEST_ENTRY_CHARS = 500  # == okf_core.ask.EXCERPT_CHARS (contract-tested)
 DIGEST_BODY_BUDGET = 10_000
 DIGEST_LEAD_PARAGRAPHS = 3
 _DIGEST_PROSE_KINDS = frozenset({"paragraph", "quote", "list"})
+
+# Concept-plan bounds: the model only groups outline sections and names the
+# groups — it never contributes body text, and a plan outside these bounds is
+# discarded in favor of one concept per document.
+PLAN_MAX_CONCEPTS = 12
+PLAN_SNIPPET_CHARS = 200
+PLAN_TITLE_CHARS = 120
+
+# Cross-concept references per concept; capped like the explorer's link fan-out
+# so one hub concept cannot dominate navigation.
+RELATED_MAX_LINKS = 5
 
 
 def _digest_text(text: str) -> str:
@@ -285,10 +305,154 @@ def _acquire_and_normalize(
     return units
 
 
-def _plan(units: list[_SourceUnit]) -> list[ConceptPlan]:
-    """Deterministic concept boundaries: one concept per document (Phase 2).
+def _split_sections(doc: CanonicalDoc) -> tuple[list[Block], list[tuple[str, list[Block]]]]:
+    """Partition blocks at the digest section level: (preamble, [(heading, blocks)]).
 
-    A model may only make bounded split/merge decisions here; the stub makes none.
+    Mirrors ``_section_digest``'s adaptive level so the planner decides over the
+    same boundaries the digest renders. A leading H1 is the document's own title
+    and stays in the preamble.
+    """
+    blocks = list(doc.blocks)
+    preamble: list[Block] = []
+    if blocks and blocks[0].kind == "heading" and (blocks[0].level or 1) == 1:
+        preamble.append(blocks[0])
+        blocks = blocks[1:]
+
+    levels = [b.level or 1 for b in blocks if b.kind == "heading"]
+    section_level = max(DIGEST_MAX_LEVEL, min(levels)) if levels else 0
+
+    sections: list[tuple[str, list[Block]]] = []
+    current: list[Block] | None = None
+    for block in blocks:
+        if block.kind == "heading" and (block.level or 1) <= section_level:
+            current = [block]
+            sections.append((block.text, current))
+        elif current is None:
+            preamble.append(block)
+        else:
+            current.append(block)
+    return preamble, sections
+
+
+def _validate_plan(concepts: Any, section_count: int) -> list[dict[str, Any]] | None:
+    """Normalize a model plan; ``[]`` means "keep whole", ``None`` means unusable.
+
+    A usable plan partitions the section indexes exactly — no gaps, no
+    duplicates — within the concept-count bound; titles are link-stripped and
+    length-capped so planner output can never smuggle live Markdown into the
+    bundle.
+    """
+    if not isinstance(concepts, list):
+        return None
+    if not concepts:
+        return []
+    if len(concepts) > PLAN_MAX_CONCEPTS:
+        return None
+    plan: list[dict[str, Any]] = []
+    claimed: set[int] = set()
+    for entry in concepts:
+        if not isinstance(entry, dict):
+            return None
+        title = _digest_text(str(entry.get("title", "")))[:PLAN_TITLE_CHARS].strip()
+        raw_sections = entry.get("sections")
+        if not title or not isinstance(raw_sections, list) or not raw_sections:
+            return None
+        indexes: list[int] = []
+        for value in raw_sections:
+            if isinstance(value, bool) or not isinstance(value, int):
+                return None
+            indexes.append(value)
+        if indexes != sorted(indexes) or len(set(indexes)) != len(indexes):
+            return None
+        if claimed & set(indexes):
+            return None
+        claimed.update(indexes)
+        plan.append({"title": title, "sections": indexes})
+    if claimed != set(range(section_count)):
+        return None
+    return plan
+
+
+def _planned_docs(
+    doc: CanonicalDoc,
+    provider: ModelProvider,
+    cache: BuildCache,
+    generation_version: str,
+) -> list[CanonicalDoc]:
+    """Bounded model split of one document into concept slices.
+
+    The decision — including the fallback after unusable output — is cached by
+    content hash so rebuilds replay it byte-for-byte and ``diff --check`` stays
+    green behind a nondeterministic model. The model sees only link-stripped
+    outline text and contributes only boundaries and titles, never body text.
+    """
+    preamble, sections = _split_sections(doc)
+    if len(sections) < 2:
+        return [doc]
+
+    key = generation_cache_key(
+        content_hash=doc.content_hash(),
+        prompt_id="concept-plan",
+        provider_id=provider.id,
+        generation_version=generation_version,
+    )
+    cached = cache.generated(key)
+    if cached is None:
+        payload = {
+            "title": doc.title,
+            "sections": [
+                {
+                    "index": i,
+                    "heading": _digest_text(heading)[:DIGEST_HEADING_CHARS],
+                    "snippet": _digest_text(
+                        next((b.text for b in blocks if b.kind in _DIGEST_PROSE_KINDS), "")
+                    )[:PLAN_SNIPPET_CHARS],
+                }
+                for i, (heading, blocks) in enumerate(sections)
+            ],
+        }
+        raw = _complete(provider, "concept-plan", payload, doc.title).strip()
+        fenced = _FENCE_RE.match(raw)
+        try:
+            data = json.loads(fenced.group(1) if fenced else raw)
+        except json.JSONDecodeError:
+            data = None
+        concepts = data.get("concepts") if isinstance(data, dict) else None
+        cached = {
+            "concepts": _validate_plan(concepts, len(sections)),
+            "model": _served_model(provider),
+        }
+        cache.store_generated(key, cached)
+
+    # Re-validate on the way out: the cache is derived state and may be foreign.
+    concepts = cached.get("concepts") if isinstance(cached, dict) else None
+    plan = _validate_plan(concepts, len(sections))
+    if not plan:
+        return [doc]
+
+    slices: list[CanonicalDoc] = []
+    for entry in plan:
+        slice_blocks: list[Block] = []
+        if 0 in entry["sections"]:
+            slice_blocks.extend(preamble)
+        for index in entry["sections"]:
+            slice_blocks.extend(sections[index][1])
+        slices.append(replace(doc, title=entry["title"], blocks=tuple(slice_blocks)))
+    return slices
+
+
+def _plan(
+    units: list[_SourceUnit],
+    provider: ModelProvider,
+    cache: BuildCache,
+    generation_version: str,
+) -> list[ConceptPlan]:
+    """Concept boundaries: bounded model split decisions over section outlines,
+    falling back to one concept per document.
+
+    The stub always answers "keep whole", so CI bundles are byte-identical to
+    the pre-planner era; real providers may slice a document into several
+    concepts, each carrying the same source provenance.
     """
     plans: list[ConceptPlan] = []
     used_paths: set[str] = set()
@@ -296,15 +460,54 @@ def _plan(units: list[_SourceUnit]) -> list[ConceptPlan]:
         unit.source_id = f"source-{index:03d}"
         unit.ref_path = f"{bundle_mod.REFERENCES_DIR}/{unit.source_id}.md"
         for doc in unit.docs:
-            base = _slugify(doc.title)
-            concept_path = f"concepts/{base}.md"
-            counter = 2
-            while concept_path in used_paths:
-                concept_path = f"concepts/{base}-{counter}.md"
-                counter += 1
-            used_paths.add(concept_path)
-            plans.append(ConceptPlan(doc=doc, unit=unit, concept_path=concept_path))
+            for concept_doc in _planned_docs(doc, provider, cache, generation_version):
+                base = _slugify(concept_doc.title)
+                concept_path = f"concepts/{base}.md"
+                counter = 2
+                while concept_path in used_paths:
+                    concept_path = f"concepts/{base}-{counter}.md"
+                    counter += 1
+                used_paths.add(concept_path)
+                plans.append(ConceptPlan(doc=concept_doc, unit=unit, concept_path=concept_path))
     return plans
+
+
+def _title_matches(terms: set[str], tokens: set[str]) -> bool:
+    """All salient title terms must occur, tolerating one missing when the
+    title has three or more — prose says "the wire protocol" where the title
+    says "Wire Protocol Spec"."""
+    if not terms:
+        return False
+    matched = len(terms & tokens)
+    return matched == len(terms) or (len(terms) >= 3 and matched >= len(terms) - 1)
+
+
+def _related_links(plans: list[ConceptPlan]) -> dict[str, list[ConceptPlan]]:
+    """Cross-concept references from title-term matching: A links to B when B's
+    salient title terms occur in A's text (see ``_title_matches``).
+
+    Pure code over link-stripped source text — sorted and capped — so the link
+    graph never depends on model output and viz/PD hops gain edges even under
+    the stub.
+    """
+    token_sets: dict[str, set[str]] = {}
+    term_sets: dict[str, set[str]] = {}
+    for plan in plans:
+        text = " ".join(_digest_text(block.text) for block in plan.doc.blocks)
+        token_sets[plan.concept_path] = set(indexing.tokenize(text))
+        term_sets[plan.concept_path] = set(indexing.question_terms(plan.doc.title))
+
+    related: dict[str, list[ConceptPlan]] = {}
+    for plan in plans:
+        candidates = [
+            other
+            for other in plans
+            if other.concept_path != plan.concept_path
+            and _title_matches(term_sets[other.concept_path], token_sets[plan.concept_path])
+        ]
+        candidates.sort(key=lambda p: p.concept_path)
+        related[plan.concept_path] = candidates[:RELATED_MAX_LINKS]
+    return related
 
 
 def render_blocks(blocks: Iterable[Block]) -> str:
@@ -328,11 +531,15 @@ def _generate(
     provider: ModelProvider,
     cache: BuildCache,
     clock: Callable[[], str],
+    generation_version: str,
 ) -> None:
+    related = _related_links(plans)
     for unit in units:
         _write_reference_snapshot(stage, unit)
     for plan in plans:
-        _write_concept(stage, plan, provider, cache, clock)
+        _write_concept(
+            stage, plan, provider, cache, clock, generation_version, related[plan.concept_path]
+        )
 
 
 def _write_reference_snapshot(stage: Path, unit: _SourceUnit) -> None:
@@ -353,27 +560,61 @@ def _write_reference_snapshot(stage: Path, unit: _SourceUnit) -> None:
     _write_file(stage / unit.ref_path, write_document(ParsedDocument(frontmatter, body)))
 
 
+def _complete(provider: ModelProvider, prompt_id: str, payload: dict[str, Any], title: str) -> str:
+    """One provider call, with the failing document named in the error — a
+    refusal or truncation on source 7 of 40 is otherwise undebuggable."""
+    try:
+        return provider.complete(prompt_id, payload)
+    except Exception as exc:
+        raise PipelineError(f"{prompt_id} failed for {title!r}: {exc}") from exc
+
+
+def _served_model(provider: ModelProvider) -> str:
+    """The model that actually produced the last completion.
+
+    Providers with a refusal-fallback strategy may serve a request with a
+    different model than the one addressed; recording it beside each cached
+    generation keeps provenance honest while the cache *key* stays the
+    requested provider id (the request's identity).
+    """
+    return str(getattr(provider, "served_model_id", provider.id))
+
+
 def _generated_fields(
     doc: CanonicalDoc,
     provider: ModelProvider,
     cache: BuildCache,
     clock: Callable[[], str],
+    generation_version: str,
 ) -> dict[str, Any]:
     key = generation_cache_key(
         content_hash=doc.content_hash(),
         prompt_id="concept-description",
         provider_id=provider.id,
+        generation_version=generation_version,
     )
     cached = cache.generated(key)
     if cached is not None:
         return cached
     excerpt = _strip_links(next((b.text for b in doc.blocks if b.kind == "paragraph"), ""))[:400]
+    payload = {"title": doc.title, "excerpt": excerpt, "content_hash": doc.content_hash()}
+    description = _complete(provider, "concept-description", payload, doc.title)
+    model = _served_model(provider)
+    # generated_at is keyed without generation_version and fingerprinted by the
+    # output: a bump that reproduces identical output keeps its first-produced
+    # timestamp (the revision must not change on timestamp noise alone), while
+    # changed output gets a fresh, honest one.
+    timestamp_key = generation_timestamp_key(
+        content_hash=doc.content_hash(),
+        prompt_id="concept-description",
+        provider_id=provider.id,
+    )
     fields: dict[str, Any] = {
-        "description": provider.complete(
-            "concept-description",
-            {"title": doc.title, "excerpt": excerpt, "content_hash": doc.content_hash()},
+        "description": description,
+        "generated_at": cache.stable_generated_at(
+            timestamp_key, sha256_hex("\x00".join((description, model))), clock()
         ),
-        "generated_at": clock(),
+        "model": model,
     }
     cache.store_generated(key, fields)
     return fields
@@ -385,9 +626,11 @@ def _write_concept(
     provider: ModelProvider,
     cache: BuildCache,
     clock: Callable[[], str],
+    generation_version: str,
+    related: list[ConceptPlan],
 ) -> None:
     doc, unit = plan.doc, plan.unit
-    generated = _generated_fields(doc, provider, cache, clock)
+    generated = _generated_fields(doc, provider, cache, clock, generation_version)
     description = str(generated["description"])
 
     frontmatter = Frontmatter(
@@ -403,6 +646,9 @@ def _write_concept(
 
     sections = [f"# Summary\n\n{description}[^{unit.source_id}]"]
     sections.extend(_section_digest(doc))
+    if related:
+        links = "\n".join(f"- [{other.doc.title}](/{other.concept_path})" for other in related)
+        sections.append(f"# Related\n\n{links}")
     sections.append(f"# Sources\n\n- [{unit.title}](/{unit.ref_path})")
     sections.append(f"[^{unit.source_id}]: {unit.title} ({unit.uri})")
 
@@ -456,10 +702,13 @@ def build_revision(
     stage_dir: Path | None = None,
     publish: bool = True,
     clock: Callable[[], str] | None = None,
+    generation_version: str = DEFAULT_GENERATION_VERSION,
 ) -> BuildOutcome:
     """Run the full pipeline; publish a new immutable revision when content changed.
 
     With ``publish=False`` the staged tree is left in place (used by diff --check).
+    ``generation_version`` is the user-facing regeneration knob: bumping it in
+    project config invalidates every cached model generation for this bundle.
     """
     bundle_dir.mkdir(parents=True, exist_ok=True)
     clock = clock or _utc_now
@@ -470,9 +719,16 @@ def build_revision(
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
 
-    units = _acquire_and_normalize(sources, cache)
-    plans = _plan(units)
-    _generate(stage, units, plans, provider, cache, clock)
+    try:
+        units = _acquire_and_normalize(sources, cache)
+        plans = _plan(units, provider, cache, generation_version)
+        _generate(stage, units, plans, provider, cache, clock, generation_version)
+    except Exception:
+        # A failed build (e.g. one refused model call) must not discard the
+        # model decisions that already succeeded: the cache is content-keyed,
+        # so persisting it is always safe and makes a retry incremental.
+        cache.save()
+        raise
     _link(stage, project_name, plans)
 
     revision_id = compute_revision_id(stage)
@@ -508,6 +764,7 @@ def build_revision(
         "project": project_name,
         "provider": provider.id,
         "generator_version": GENERATOR_VERSION,
+        "generation_version": generation_version,
         "okf_core_version": core_version,
         "stages": list(STAGES),
         "counts": {
@@ -540,6 +797,7 @@ def check_reproducibility(
     sources: Sequence[PipelineSource],
     provider: ModelProvider,
     clock: Callable[[], str] | None = None,
+    generation_version: str = DEFAULT_GENERATION_VERSION,
 ) -> tuple[str, list[tuple[str, str]]]:
     """Rebuild to a temp stage and byte-compare against the current revision.
 
@@ -559,6 +817,7 @@ def check_reproducibility(
         stage_dir=stage,
         publish=False,
         clock=clock,
+        generation_version=generation_version,
     )
     assert outcome.staged_dir is not None
     drift = compare_trees(revision_dir(bundle_dir, current), outcome.staged_dir)

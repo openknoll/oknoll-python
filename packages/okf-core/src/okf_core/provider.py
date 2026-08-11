@@ -15,11 +15,22 @@ from okf_core.canonical import sha256_hex
 # Bumping either constant invalidates cached model-generated fields.
 # 2: concept bodies carry a per-section digest instead of the first three
 #    paragraphs — cached generated_at stamps must not pair with new bodies.
-GENERATOR_VERSION = "2"
+# 3: concepts carry a Related section and may be model-planned slices of a
+#    source — cached plans and stamps from the one-concept-per-doc era must
+#    not pair with the new bodies.
+GENERATOR_VERSION = "3"
 PROMPT_VERSIONS: dict[str, str] = {
     "concept-description": "1",
+    "concept-plan": "1",
     "answer-question": "1",
 }
+
+# Default for the user-facing regeneration knob ([build].generation_version in
+# oknoll.toml). Bumping it in a project is a deliberate, committed event that
+# invalidates every cached model generation for that bundle — the escape hatch
+# for "same model id, same prompts, but I want fresh output" (e.g. a provider
+# alias whose underlying model improved).
+DEFAULT_GENERATION_VERSION = "0"
 
 
 class ModelProvider(Protocol):
@@ -41,6 +52,10 @@ class StubModelProvider:
         if prompt_id == "concept-description":
             title = str(payload.get("title", "")).strip() or "this concept"
             return f"Grounded notes on {title}, generated from the acquired source material."
+        if prompt_id == "concept-plan":
+            # The stub never splits: an empty concept list means "keep the
+            # document as one concept", the pre-planner behavior.
+            return '{"concepts": []}'
         if prompt_id == "answer-question":
             evidence = payload.get("evidence")
             items = evidence if isinstance(evidence, list) else []
@@ -62,8 +77,34 @@ def generation_cache_key(
     provider_id: str,
     prompt_version: str | None = None,
     generator_version: str = GENERATOR_VERSION,
+    generation_version: str = DEFAULT_GENERATION_VERSION,
 ) -> str:
     """Stable cache key for one model-generated field."""
+    version = prompt_version if prompt_version is not None else PROMPT_VERSIONS[prompt_id]
+    return sha256_hex(
+        "\x00".join(
+            (content_hash, prompt_id, version, provider_id, generator_version, generation_version)
+        )
+    )
+
+
+def generation_timestamp_key(
+    *,
+    content_hash: str,
+    prompt_id: str,
+    provider_id: str,
+    prompt_version: str | None = None,
+    generator_version: str = GENERATOR_VERSION,
+) -> str:
+    """Identity under which a generation's first-produced timestamp is kept.
+
+    Everything in :func:`generation_cache_key` except ``generation_version``:
+    a deliberate regeneration (bumped knob) that reproduces identical output
+    must keep its original ``generated.at`` so the revision does not change on
+    timestamp noise alone. Output that actually changed re-mints the
+    timestamp — the fingerprint check in ``BuildCache.stable_generated_at``
+    keeps provenance honest.
+    """
     version = prompt_version if prompt_version is not None else PROMPT_VERSIONS[prompt_id]
     return sha256_hex(
         "\x00".join((content_hash, prompt_id, version, provider_id, generator_version))

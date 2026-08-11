@@ -39,6 +39,9 @@ class ProjectConfig:
     # ~/.oknoll/config.toml and then the "stub" default (see main._provider_for).
     model: str | None = None
     embedder: str | None = None
+    # Regeneration knob: bumping it invalidates every cached model generation
+    # for this bundle, so the next build re-generates as a reviewable revision.
+    generation_version: str = "0"
     strict: bool = False
     sources: list[RegisteredSource] = field(default_factory=list)
 
@@ -81,6 +84,9 @@ def load_project(root: Path) -> ProjectConfig:
 
     model = build.get("model")
     embedder = rag.get("embedder")
+    generation_version = build.get("generation_version", "0")
+    if isinstance(generation_version, bool) or not isinstance(generation_version, (str, int)):
+        raise ProjectError(f"{config_path}: [build].generation_version must be a string or integer")
     return ProjectConfig(
         root=root,
         name=str(project.get("name", root.name)),
@@ -88,6 +94,7 @@ def load_project(root: Path) -> ProjectConfig:
         bundle_dir=str(paths.get("bundle", "bundle")),
         model=str(model) if model is not None else None,
         embedder=str(embedder) if embedder is not None else None,
+        generation_version=str(generation_version),
         strict=bool(lint.get("strict", False)),
         sources=sources,
     )
@@ -137,6 +144,10 @@ bundle = "bundle"
 #   model = "ollama:llama3"             # needs a local `ollama serve`
 # Unset here, so the machine default in ~/.oknoll/config.toml applies:
 # model = "stub"
+# Bump to deliberately regenerate all model-generated fields on the next
+# build (e.g. after a provider alias started serving a better model). The
+# rebuild publishes a new revision with a reviewable diff:
+# generation_version = "1"
 
 [rag]
 # Embedding provider for `oknoll ask --mode rag` (the vector baseline). Precedence:

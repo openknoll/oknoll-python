@@ -1,4 +1,4 @@
-"""Prompt templates for the two okf-core prompt ids, rendered for real providers.
+"""Prompt templates for the okf-core prompt ids, rendered for real providers.
 
 The deterministic stub embeds its own "prompt"; real providers share these
 templates so Anthropic and Ollama answer from identical instructions. Changing
@@ -18,6 +18,17 @@ _CONCEPT_SYSTEM = (
     "nothing else: no headings, no lists, no preamble."
 )
 
+_PLAN_SYSTEM = (
+    "You plan concept boundaries for a knowledge bundle. Given a document's "
+    "section outline, group the sections into a small number of coherent "
+    "concepts. Reply with JSON only — no prose, no code fences — of the form "
+    '{"concepts": [{"title": "...", "sections": [0, 1]}, ...]}. Every section '
+    "index must appear in exactly one concept. Prefer contiguous runs of "
+    "sections and one to six concepts; titles are short noun phrases drawn "
+    "from the outline's own vocabulary. If the document is best kept as a "
+    'single concept, reply {"concepts": []}.'
+)
+
 _ANSWER_SYSTEM = (
     "You answer questions using only the evidence passages provided. Every "
     "claim in your answer must be supported by one of the passages; cite the "
@@ -35,6 +46,21 @@ def render(prompt_id: str, payload: dict[str, Any]) -> tuple[str, str]:
         excerpt = str(payload.get("excerpt", "")).strip()
         user = f"Concept title: {title}\n\nSource excerpt:\n{excerpt}"
         return _CONCEPT_SYSTEM, user
+    if prompt_id == "concept-plan":
+        title = str(payload.get("title", "")).strip() or "(untitled document)"
+        sections = payload.get("sections")
+        items = sections if isinstance(sections, list) else []
+        lines: list[str] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            index = item.get("index")
+            heading = str(item.get("heading", "")).strip()
+            snippet = str(item.get("snippet", "")).strip()
+            lines.append(f"{index}. {heading} — {snippet}" if snippet else f"{index}. {heading}")
+        outline = "\n".join(lines) if lines else "(no sections)"
+        user = f"Document title: {title}\n\nSections:\n{outline}"
+        return _PLAN_SYSTEM, user
     if prompt_id == "answer-question":
         question = str(payload.get("question", "")).strip()
         evidence = payload.get("evidence")

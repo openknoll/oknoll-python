@@ -22,11 +22,19 @@ platform consumes these packages as pinned git-tag dependencies.
 ## Install
 
 The `oknoll` CLI is fully useful offline and local — no cloud account, no service.
-From PyPI (v0.3.0 onward):
+
+With [Homebrew](https://brew.sh) (macOS and Linux; pre-built bottles, no Python
+or Rust toolchain needed):
+
+```sh
+brew install openknoll/tap/oknoll
+oknoll --help
+```
+
+Or from PyPI (v0.3.0 onward), into an isolated tool environment:
 
 ```sh
 uv tool install oknoll     # or: pipx install oknoll
-oknoll --help
 ```
 
 To hack on it instead, run it out of a clone with [`uv`](https://docs.astral.sh/uv/):
@@ -217,7 +225,12 @@ disk, reach the network, or drop a trust warning.
 ### Configuration
 
 By default `build`/`ask`/`chat` use a deterministic stub model (no network,
-reproducible). Real providers are configured in two separate planes:
+reproducible) — that default exists for CI and benchmarks. For bundle quality,
+configure a real model: it writes the concept descriptions, and it plans
+concept boundaries — splitting a multi-section document into several
+topic-scoped concepts instead of one digest per source (the stub always keeps
+one concept per document). Real providers are configured in two separate
+planes:
 
 - **Settings** (which model/embedder, the Ollama endpoint) resolve
   *specific beats general*: CLI flag (`ask --model …`) → the bundle's
@@ -249,6 +262,31 @@ Set `GITHUB_TOKEN` before `oknoll build` to raise GitHub API rate limits for lar
 repositories. `login` and `keys` land with the hosted control plane in a later phase and
 currently exit with a clear "not implemented yet" message.
 
+### Regenerating model output
+
+Model generations are cached by content hash + prompt version + model id, so
+rebuilds are reproducible: `oknoll diff --check` proves a rebuild matches the
+published revision byte for byte. The flip side is that cached output never
+improves on its own. Regeneration is therefore a deliberate, versioned event —
+bump the knob in `oknoll.toml` and rebuild:
+
+```toml
+[build]
+generation_version = "1"   # bump to re-make every cached model decision
+```
+
+The next `oknoll build` re-asks the model for every generated field (concept
+plans and descriptions) and, if anything changed, publishes a new immutable
+revision with a reviewable diff — the old revision stays untouched. Commit the
+bump alongside the new revision so the regeneration is visible in history.
+Switching models needs no bump: a new model id already invalidates the cache.
+
+With the Anthropic provider, a request declined by a safety classifier is
+automatically re-run on Anthropic's recommended fallback model in the same
+call instead of failing the build (`oknoll build` prints a note when this
+happens). The cache stores which model actually served each generation, so
+provenance stays honest even when the fallback answers.
+
 ## Development
 
 Requires [`uv`](https://docs.astral.sh/uv/) (Python 3.12 is provisioned automatically).
@@ -271,6 +309,15 @@ make install && make lint typecheck test      # refresh uv.lock, verify
 # commit, promote develop → main by PR, then:
 git tag v0.4.0 && git push origin v0.4.0      # release.yml gates, builds, publishes
 ```
+
+After publishing to PyPI, `release.yml` regenerates the Homebrew formula
+(`scripts/generate_brew_formula.py` — resolves the released version's full
+dependency closure and emits the formula; `brew update-python-resources`
+can't be used because it ignores packages uploaded within the last day) and
+opens a PR against [openknoll/homebrew-tap](https://github.com/openknoll/homebrew-tap).
+The tap's own `brew test-bot` CI gates that PR (audit, source install,
+`brew test`); merge it with the tap's `brew pr-pull` workflow so bottles get
+built and published with it.
 
 Troubleshooting (macOS): if a long-lived `oknoll` process ever dies on import with
 `ModuleNotFoundError: No module named 'okf_core'`, run `chflags -R nohidden .venv` once —

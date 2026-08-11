@@ -238,8 +238,10 @@ def answer_question(
         read_docs.append(doc)
 
     # 4. follow concept→concept links with bounded fan-out (≤4). A hop is
-    #    justified by its anchor text, so the linked document is scored against
-    #    the question terms *plus* that anchor's terms.
+    #    justified by its anchor text, so the linked document's *excerpt* is
+    #    chosen with the question terms plus the anchor's salient terms — the
+    #    hop's payoff usually answers in different vocabulary than the question
+    #    (that is why it needed a link to be found).
     followed = 0
     seen_paths = {str(doc["path"]) for doc in read_docs}
     for doc in list(read_docs):
@@ -264,19 +266,27 @@ def answer_question(
                 continue
             seen_paths.add(target)
             linked = traced.call("read", path=target)
-            linked["_terms"] = terms | tokenize(anchors.get(target, ""))
+            linked["_terms"] = terms | set(question_terms(anchors.get(target, "")))
             linked["_via"] = parent
             read_docs.append(linked)
             followed += 1
 
     # 5. deterministic evidence selection: best matching paragraph per document,
     #    with reference snapshots of an already-cited concept folded away.
+    #    Anchor terms may *choose* a hop's excerpt (its payoff usually answers
+    #    in different vocabulary), but ranking counts question-term hits alone,
+    #    with the stable sort keeping navigation order (search rank, then hop
+    #    discovery) as the tie-break. Ranking on anchor-augmented scores lets a
+    #    single-salient-term question ("What is A2K?") rank every hop above the
+    #    seed that defines the term, displacing the very document search put
+    #    first.
     evidence: list[dict[str, Any]] = []
     for doc in read_docs:
         doc_terms = doc["_terms"] if isinstance(doc["_terms"], set) else terms
-        excerpt, score = _best_excerpt(str(doc["body"]), doc_terms)
-        if score < 1:
+        excerpt, matched = _best_excerpt(str(doc["body"]), doc_terms)
+        if matched < 1:
             continue
+        score = len(terms & tokenize(excerpt))
         frontmatter = doc["frontmatter"] if isinstance(doc["frontmatter"], dict) else {}
         title = frontmatter.get("title") or str(doc["path"])
         evidence.append(
@@ -289,7 +299,7 @@ def answer_question(
                 "via": doc["_via"],
             }
         )
-    evidence.sort(key=lambda e: (-int(e["score"]), str(e["path"])))
+    evidence.sort(key=lambda e: -int(e["score"]))  # stable: ties keep navigation order
     cited_resources: set[str] = set()
     for entry in evidence:
         for source in Frontmatter(data=entry["frontmatter"]).sources:

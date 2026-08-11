@@ -104,6 +104,30 @@ def test_rebuild_without_changes_is_idempotent(project_root: Path) -> None:
     assert [d.name for d in revisions] == [first.revision_id]
 
 
+def test_generation_bump_at_a_later_time_republishes_nothing(project_root: Path) -> None:
+    """A generation_version bump regenerates, but identical output must keep
+    the revision — even when the clock has moved on. generated.at is keyed
+    without the bump and fingerprinted by the output, so timestamp noise alone
+    can never publish a new revision (this raced by wall-clock second before)."""
+    first = _build(project_root)
+    misses_before = first.report["cache"]["misses"]
+
+    second = build_revision(
+        bundle_dir=project_root / "bundle",
+        project_name="handbook",
+        sources=_sources(project_root),
+        provider=StubModelProvider(),
+        clock=lambda: "2027-01-01T12:34:56Z",  # well past FIXED_CLOCK
+        generation_version="1",
+    )
+
+    # The bump really regenerated (fresh generation misses), yet nothing changed.
+    assert second.report["cache"]["misses"] > 0
+    assert misses_before > 0
+    assert second.revision_id == first.revision_id
+    assert not second.changed and not second.published
+
+
 def test_independent_builds_are_byte_identical(tmp_path: Path) -> None:
     for name in ("a", "b"):
         root = tmp_path / name
