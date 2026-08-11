@@ -88,6 +88,29 @@ def generation_cache_key(
     )
 
 
+def generation_timestamp_key(
+    *,
+    content_hash: str,
+    prompt_id: str,
+    provider_id: str,
+    prompt_version: str | None = None,
+    generator_version: str = GENERATOR_VERSION,
+) -> str:
+    """Identity under which a generation's first-produced timestamp is kept.
+
+    Everything in :func:`generation_cache_key` except ``generation_version``:
+    a deliberate regeneration (bumped knob) that reproduces identical output
+    must keep its original ``generated.at`` so the revision does not change on
+    timestamp noise alone. Output that actually changed re-mints the
+    timestamp — the fingerprint check in ``BuildCache.stable_generated_at``
+    keeps provenance honest.
+    """
+    version = prompt_version if prompt_version is not None else PROMPT_VERSIONS[prompt_id]
+    return sha256_hex(
+        "\x00".join((content_hash, prompt_id, version, provider_id, generator_version))
+    )
+
+
 def resolve_provider(name: str) -> ModelProvider:
     """Resolve a configured provider name (available: stub)."""
     if name == "stub":

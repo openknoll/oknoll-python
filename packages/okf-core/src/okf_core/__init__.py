@@ -46,6 +46,7 @@ from okf_core.provider import (
     ModelProvider,
     StubModelProvider,
     generation_cache_key,
+    generation_timestamp_key,
     resolve_provider,
 )
 from okf_core.rag import EmbeddingProvider, StubEmbeddingProvider, resolve_embedder
@@ -94,6 +95,7 @@ __all__ = [
     "check_reproducibility",
     "ensure_index",
     "generation_cache_key",
+    "generation_timestamp_key",
     "lint_bundle",
     "pack_bundle",
     "parse_document",
