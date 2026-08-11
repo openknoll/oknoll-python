@@ -417,7 +417,10 @@ def _planned_docs(
         except json.JSONDecodeError:
             data = None
         concepts = data.get("concepts") if isinstance(data, dict) else None
-        cached = {"concepts": _validate_plan(concepts, len(sections))}
+        cached = {
+            "concepts": _validate_plan(concepts, len(sections)),
+            "model": _served_model(provider),
+        }
         cache.store_generated(key, cached)
 
     # Re-validate on the way out: the cache is derived state and may be foreign.
@@ -565,6 +568,17 @@ def _complete(provider: ModelProvider, prompt_id: str, payload: dict[str, Any], 
         raise PipelineError(f"{prompt_id} failed for {title!r}: {exc}") from exc
 
 
+def _served_model(provider: ModelProvider) -> str:
+    """The model that actually produced the last completion.
+
+    Providers with a refusal-fallback strategy may serve a request with a
+    different model than the one addressed; recording it beside each cached
+    generation keeps provenance honest while the cache *key* stays the
+    requested provider id (the request's identity).
+    """
+    return str(getattr(provider, "served_model_id", provider.id))
+
+
 def _generated_fields(
     doc: CanonicalDoc,
     provider: ModelProvider,
@@ -586,6 +600,7 @@ def _generated_fields(
     fields: dict[str, Any] = {
         "description": _complete(provider, "concept-description", payload, doc.title),
         "generated_at": clock(),
+        "model": _served_model(provider),
     }
     cache.store_generated(key, fields)
     return fields

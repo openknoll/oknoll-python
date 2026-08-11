@@ -351,3 +351,17 @@ def test_generation_version_bump_regenerates(tmp_path: Path) -> None:
     # and the revision id is unchanged — only the cache was rebuilt.
     assert third.revision_id == first.revision_id
     assert read_current_revision_id(tmp_path / "bundle") == first.revision_id
+
+
+def test_cached_generations_record_serving_model(tmp_path: Path) -> None:
+    """The cache key is the requested provider; the cached value records who
+    actually served (a refusal-fallback provider may differ per call)."""
+    _write_sources(tmp_path, {"spec.md": SPEC_MD})
+    provider = ScriptedProvider(json.dumps(SPLIT_PLAN))
+    provider.served_model_id = "scripted:fallback-model"  # type: ignore[attr-defined]
+    _build(tmp_path, provider)
+
+    cache_file = tmp_path / "bundle" / ".oknoll" / "cache" / "build-cache.json"
+    entries = json.loads(cache_file.read_text(encoding="utf-8"))["generate"].values()
+    assert entries
+    assert all(entry["model"] == "scripted:fallback-model" for entry in entries)
