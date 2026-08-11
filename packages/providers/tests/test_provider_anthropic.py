@@ -36,12 +36,13 @@ def _message_body(
     return body
 
 
-def _provider_with(handler: httpx.MockTransport, *, max_tokens: int = 2048) -> AnthropicProvider:
+def _provider_with(handler: httpx.MockTransport, *, max_tokens: int | None = None) -> AnthropicProvider:
+    kwargs: dict[str, Any] = {} if max_tokens is None else {"max_tokens": max_tokens}
     return AnthropicProvider(
         "claude-opus-5",
         api_key="test-key",
-        max_tokens=max_tokens,
         http_client=httpx.Client(transport=handler),
+        **kwargs,
     )
 
 
@@ -63,7 +64,9 @@ def test_request_shape_and_headers() -> None:
     assert "anthropic-version" in seen["headers"]
     body = seen["body"]
     assert body["model"] == "claude-opus-5"
-    assert body["max_tokens"] == 2048
+    # Thinking is on by default on Opus 5 and counts against max_tokens, so
+    # the default cap must leave headroom well beyond the visible answer.
+    assert body["max_tokens"] == 16000
     assert body["messages"][0]["role"] == "user"
     assert "Who signs off a release?" in body["messages"][0]["content"]
     assert "concepts/duty-roster.md" in body["messages"][0]["content"]
