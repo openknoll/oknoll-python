@@ -25,7 +25,7 @@ from okf_core import bundle as bundle_mod
 from okf_core import indexing
 from okf_core._version import __version__ as core_version
 from okf_core.cache import BuildCache
-from okf_core.canonical import Block, CanonicalDoc, SourceRef
+from okf_core.canonical import Block, CanonicalDoc, SourceRef, sha256_hex
 from okf_core.findings import LintReport
 from okf_core.frontmatter import Frontmatter, ParsedDocument, write_document
 from okf_core.lint import lint_bundle
@@ -34,6 +34,7 @@ from okf_core.provider import (
     GENERATOR_VERSION,
     ModelProvider,
     generation_cache_key,
+    generation_timestamp_key,
 )
 from okf_core.revision import (
     compare_trees,
@@ -597,10 +598,23 @@ def _generated_fields(
         return cached
     excerpt = _strip_links(next((b.text for b in doc.blocks if b.kind == "paragraph"), ""))[:400]
     payload = {"title": doc.title, "excerpt": excerpt, "content_hash": doc.content_hash()}
+    description = _complete(provider, "concept-description", payload, doc.title)
+    model = _served_model(provider)
+    # generated_at is keyed without generation_version and fingerprinted by the
+    # output: a bump that reproduces identical output keeps its first-produced
+    # timestamp (the revision must not change on timestamp noise alone), while
+    # changed output gets a fresh, honest one.
+    timestamp_key = generation_timestamp_key(
+        content_hash=doc.content_hash(),
+        prompt_id="concept-description",
+        provider_id=provider.id,
+    )
     fields: dict[str, Any] = {
-        "description": _complete(provider, "concept-description", payload, doc.title),
-        "generated_at": clock(),
-        "model": _served_model(provider),
+        "description": description,
+        "generated_at": cache.stable_generated_at(
+            timestamp_key, sha256_hex("\x00".join((description, model))), clock()
+        ),
+        "model": model,
     }
     cache.store_generated(key, fields)
     return fields
