@@ -410,7 +410,7 @@ def _planned_docs(
                 for i, (heading, blocks) in enumerate(sections)
             ],
         }
-        raw = provider.complete("concept-plan", payload).strip()
+        raw = _complete(provider, "concept-plan", payload, doc.title).strip()
         fenced = _FENCE_RE.match(raw)
         try:
             data = json.loads(fenced.group(1) if fenced else raw)
@@ -556,6 +556,15 @@ def _write_reference_snapshot(stage: Path, unit: _SourceUnit) -> None:
     _write_file(stage / unit.ref_path, write_document(ParsedDocument(frontmatter, body)))
 
 
+def _complete(provider: ModelProvider, prompt_id: str, payload: dict[str, Any], title: str) -> str:
+    """One provider call, with the failing document named in the error — a
+    refusal or truncation on source 7 of 40 is otherwise undebuggable."""
+    try:
+        return provider.complete(prompt_id, payload)
+    except Exception as exc:
+        raise PipelineError(f"{prompt_id} failed for {title!r}: {exc}") from exc
+
+
 def _generated_fields(
     doc: CanonicalDoc,
     provider: ModelProvider,
@@ -573,11 +582,9 @@ def _generated_fields(
     if cached is not None:
         return cached
     excerpt = _strip_links(next((b.text for b in doc.blocks if b.kind == "paragraph"), ""))[:400]
+    payload = {"title": doc.title, "excerpt": excerpt, "content_hash": doc.content_hash()}
     fields: dict[str, Any] = {
-        "description": provider.complete(
-            "concept-description",
-            {"title": doc.title, "excerpt": excerpt, "content_hash": doc.content_hash()},
-        ),
+        "description": _complete(provider, "concept-description", payload, doc.title),
         "generated_at": clock(),
     }
     cache.store_generated(key, fields)
@@ -683,9 +690,16 @@ def build_revision(
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
 
-    units = _acquire_and_normalize(sources, cache)
-    plans = _plan(units, provider, cache, generation_version)
-    _generate(stage, units, plans, provider, cache, clock, generation_version)
+    try:
+        units = _acquire_and_normalize(sources, cache)
+        plans = _plan(units, provider, cache, generation_version)
+        _generate(stage, units, plans, provider, cache, clock, generation_version)
+    except Exception:
+        # A failed build (e.g. one refused model call) must not discard the
+        # model decisions that already succeeded: the cache is content-keyed,
+        # so persisting it is always safe and makes a retry incremental.
+        cache.save()
+        raise
     _link(stage, project_name, plans)
 
     revision_id = compute_revision_id(stage)
