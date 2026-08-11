@@ -36,7 +36,9 @@ def _message_body(
     return body
 
 
-def _provider_with(handler: httpx.MockTransport, *, max_tokens: int | None = None) -> AnthropicProvider:
+def _provider_with(
+    handler: httpx.MockTransport, *, max_tokens: int | None = None
+) -> AnthropicProvider:
     kwargs: dict[str, Any] = {} if max_tokens is None else {"max_tokens": max_tokens}
     return AnthropicProvider(
         "claude-opus-5",
