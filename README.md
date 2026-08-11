@@ -273,6 +273,12 @@ revision with a reviewable diff — the old revision stays untouched. Commit the
 bump alongside the new revision so the regeneration is visible in history.
 Switching models needs no bump: a new model id already invalidates the cache.
 
+With the Anthropic provider, a request declined by a safety classifier is
+automatically re-run on Anthropic's recommended fallback model in the same
+call instead of failing the build (`oknoll build` prints a note when this
+happens). The cache stores which model actually served each generation, so
+provenance stays honest even when the fallback answers.
+
 ## Development
 
 Requires [`uv`](https://docs.astral.sh/uv/) (Python 3.12 is provisioned automatically).

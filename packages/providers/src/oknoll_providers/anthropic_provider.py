@@ -11,6 +11,7 @@ The ``anthropic`` SDK is imported lazily so that merely importing the CLI
 from __future__ import annotations
 
 import os
+import sys
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -27,6 +28,14 @@ DEFAULT_ANTHROPIC_MODEL = "claude-opus-5"
 # short visible answer alone truncates once the model spends its thinking
 # budget, and the truncation discipline below then fails the build.
 _DEFAULT_MAX_TOKENS = 16000
+
+# Server-side refusal fallback: when a safety classifier declines a request
+# (stop_reason "refusal"), the API re-runs it on Anthropic's recommended
+# fallback model inside the same call instead of returning the refusal.
+# `served_model_id` records which model actually answered, and the pipeline
+# stores it with each cached generation — the cache *key* stays the requested
+# model (the request's identity), the cached *value* carries the provenance.
+_FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 class AnthropicProvider:
@@ -51,6 +60,7 @@ class AnthropicProvider:
         import anthropic as anthropic_sdk
 
         self.id = f"anthropic:{model}"
+        self.served_model_id = self.id
         self._model = model
         self._max_tokens = max_tokens
         self._client: anthropic.Anthropic = anthropic_sdk.Anthropic(
@@ -61,12 +71,15 @@ class AnthropicProvider:
         import anthropic as anthropic_sdk
 
         system, user = render(prompt_id, payload)
+        self.served_model_id = self.id
         try:
-            response = self._client.messages.create(
+            response = self._client.beta.messages.create(
                 model=self._model,
                 max_tokens=self._max_tokens,
                 system=system,
                 messages=[{"role": "user", "content": user}],
+                betas=[_FALLBACK_BETA],
+                extra_body={"fallbacks": "default"},
             )
         except anthropic_sdk.AuthenticationError as exc:
             raise ProviderError(
@@ -85,7 +98,17 @@ class AnthropicProvider:
             # not APIStatusError, and must not escape as a traceback.
             raise ProviderError(f"Anthropic API error: {exc}") from exc
 
+        served = str(getattr(response, "model", "") or self._model)
+        self.served_model_id = f"anthropic:{served}"
+        if served != self._model:
+            print(
+                f"note: {prompt_id} was declined by {self._model} and served by "
+                f"the fallback model {served}",
+                file=sys.stderr,
+            )
+
         if response.stop_reason == "refusal":
+            # The whole fallback chain declined.
             category = _refusal_category(response)
             detail = f" (category: {category})" if category else ""
             raise ProviderError(

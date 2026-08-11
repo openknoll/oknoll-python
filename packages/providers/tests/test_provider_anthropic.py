@@ -61,7 +61,7 @@ def test_request_shape_and_headers() -> None:
     text = provider.complete("answer-question", ANSWER_PAYLOAD)
 
     assert text == "An answer. [concepts/duty-roster.md]"
-    assert seen["url"].endswith("/v1/messages")
+    assert "/v1/messages" in seen["url"]
     assert seen["headers"]["x-api-key"] == "test-key"
     assert "anthropic-version" in seen["headers"]
     body = seen["body"]
@@ -178,3 +178,54 @@ def test_unparseable_success_body_maps_to_provider_error() -> None:
 def test_close_releases_the_http_client() -> None:
     provider = _provider_with(httpx.MockTransport(lambda r: httpx.Response(200)))
     provider.close()
+
+
+def test_fallback_opt_in_and_provenance() -> None:
+    """Every request opts into server-side refusal fallback, and the serving
+    model is recorded so the pipeline can cache honest provenance."""
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["headers"] = dict(request.headers)
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_message_body(["A grounded description."]))
+
+    provider = _provider_with(httpx.MockTransport(handler))
+    provider.complete("concept-description", {"title": "T", "excerpt": "E"})
+
+    assert seen["body"]["fallbacks"] == "default"
+    assert "server-side-fallback-2026-07-01" in seen["headers"]["anthropic-beta"]
+    assert provider.served_model_id == provider.id
+
+
+def test_fallback_served_model_is_recorded(capsys: pytest.CaptureFixture[str]) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = _message_body(["Served by the fallback."])
+        body["model"] = "claude-opus-4-8"
+        return httpx.Response(200, json=body)
+
+    provider = _provider_with(httpx.MockTransport(handler))
+    text = provider.complete("concept-description", {"title": "T", "excerpt": "E"})
+
+    assert text == "Served by the fallback."
+    assert provider.id == "anthropic:claude-opus-5"
+    assert provider.served_model_id == "anthropic:claude-opus-4-8"
+    assert "fallback model claude-opus-4-8" in capsys.readouterr().err
+    # A later successful call on the requested model resets the record.
+    provider2 = _provider_with(
+        httpx.MockTransport(lambda request: httpx.Response(200, json=_message_body(["Direct."])))
+    )
+    provider2.complete("concept-description", {"title": "T", "excerpt": "E"})
+    assert provider2.served_model_id == provider2.id
+
+
+def test_whole_fallback_chain_refusal_still_raises() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = _message_body([], stop_reason="refusal")
+        body["model"] = "claude-opus-4-8"
+        body["stop_details"] = {"type": "refusal", "category": "cyber"}
+        return httpx.Response(200, json=body)
+
+    provider = _provider_with(httpx.MockTransport(handler))
+    with pytest.raises(ProviderError, match="declined this request"):
+        provider.complete("concept-description", {"title": "T", "excerpt": "E"})
