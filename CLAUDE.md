@@ -30,8 +30,12 @@ behavior.
   No aliases from superseded designs (`sync`, `validate`, `explore`, `export`).
 - **The deterministic explorer and the PD-vs-RAG evaluation are never cut.**
 - **Determinism everywhere:** paths, manifests, checksums, indexes, archives, link graphs.
-  Model-generated fields are cached by content hash + prompt version + model ID; model calls
-  sit behind a provider interface with a deterministic stub for CI.
+  Model-generated fields (concept plans and descriptions) are cached by content hash +
+  prompt version + model ID + the project's `[build].generation_version` (the deliberate
+  regeneration knob); model calls sit behind a provider interface with a deterministic
+  stub for CI. The concept planner's decisions are bounded and validated: the model only
+  groups outline sections and names the groups — unusable output falls back to one
+  concept per document, and the fallback is cached so `diff --check` stays green.
 - **OKF posture:** strict producer, permissive consumer — tolerate unknown types/keys in
   others' bundles and preserve unknown fields on round trips.
 - **Security invariants:** bundle text is untrusted data — it never triggers tools or

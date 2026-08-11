@@ -110,3 +110,37 @@ def test_add_outside_project_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     result = runner.invoke(app, ["add", "whatever.md"])
     assert result.exit_code == 1
     assert "no oknoll.toml" in _output(result)
+
+
+def test_generation_version_bump_regenerates_deliberately(project: Path) -> None:
+    runner.invoke(app, ["add", "sources/handbook"])
+    first = runner.invoke(app, ["build"])
+    assert first.exit_code == 0, _output(first)
+
+    # Bump the regeneration knob in oknoll.toml: cached generations are
+    # deliberately invalidated, and with the deterministic stub the content —
+    # and therefore the revision — is unchanged.
+    config_path = project / "oknoll.toml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "[build]", '[build]\ngeneration_version = "1"', 1
+        ),
+        encoding="utf-8",
+    )
+    second = runner.invoke(app, ["build"])
+    assert second.exit_code == 0, _output(second)
+    assert "no changes" in _output(second)
+    assert "0 miss(es)" not in _output(second)  # the cache was rebuilt, not replayed
+
+
+def test_generation_version_must_be_string_or_int(project: Path) -> None:
+    config_path = project / "oknoll.toml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "[build]", "[build]\ngeneration_version = 1.5", 1
+        ),
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["build"])
+    assert result.exit_code == 1
+    assert "generation_version" in _output(result)

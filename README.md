@@ -217,7 +217,12 @@ disk, reach the network, or drop a trust warning.
 ### Configuration
 
 By default `build`/`ask`/`chat` use a deterministic stub model (no network,
-reproducible). Real providers are configured in two separate planes:
+reproducible) — that default exists for CI and benchmarks. For bundle quality,
+configure a real model: it writes the concept descriptions, and it plans
+concept boundaries — splitting a multi-section document into several
+topic-scoped concepts instead of one digest per source (the stub always keeps
+one concept per document). Real providers are configured in two separate
+planes:
 
 - **Settings** (which model/embedder, the Ollama endpoint) resolve
   *specific beats general*: CLI flag (`ask --model …`) → the bundle's
@@ -248,6 +253,25 @@ stub so benchmark comparisons stay reproducible).
 Set `GITHUB_TOKEN` before `oknoll build` to raise GitHub API rate limits for larger
 repositories. `login` and `keys` land with the hosted control plane in a later phase and
 currently exit with a clear "not implemented yet" message.
+
+### Regenerating model output
+
+Model generations are cached by content hash + prompt version + model id, so
+rebuilds are reproducible: `oknoll diff --check` proves a rebuild matches the
+published revision byte for byte. The flip side is that cached output never
+improves on its own. Regeneration is therefore a deliberate, versioned event —
+bump the knob in `oknoll.toml` and rebuild:
+
+```toml
+[build]
+generation_version = "1"   # bump to re-make every cached model decision
+```
+
+The next `oknoll build` re-asks the model for every generated field (concept
+plans and descriptions) and, if anything changed, publishes a new immutable
+revision with a reviewable diff — the old revision stays untouched. Commit the
+bump alongside the new revision so the regeneration is visible in history.
+Switching models needs no bump: a new model id already invalidates the cache.
 
 ## Development
 

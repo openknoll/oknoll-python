@@ -37,6 +37,7 @@ def test_cache_key_varies_with_every_input() -> None:
     assert key != generation_cache_key(**{**base, "provider_id": "real"})
     assert key != generation_cache_key(**base, prompt_version="99")
     assert key != generation_cache_key(**base, generator_version="99")
+    assert key != generation_cache_key(**base, generation_version="99")
 
 
 def test_build_cache_round_trip(tmp_path: Path) -> None:
