@@ -203,3 +203,15 @@ def test_write_trace_is_derived_state_outside_the_bundle(multihop: Path) -> None
 
     second = write_trace(multihop, result)
     assert second != path  # a repeated ask never overwrites an earlier trace
+
+
+def test_seed_defining_the_term_outranks_anchor_matched_hops(multihop: Path) -> None:
+    """The A2K regression: a hop's excerpt may be *chosen* via its anchor text,
+    but ranking counts question-term hits only (navigation order breaks ties) —
+    otherwise anchor-matched hops displace the very seed that defines the term."""
+    result = _ask(multihop, "What is the release process?")
+    assert not result.abstained
+    cited = [c.path for c in result.citations]
+    assert cited[0] == "concepts/release-process.md"
+    # The hop still contributes evidence — ranked after the seed, not instead of it.
+    assert "concepts/duty-roster.md" in cited
