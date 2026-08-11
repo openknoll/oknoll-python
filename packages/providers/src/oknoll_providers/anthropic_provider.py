@@ -22,7 +22,11 @@ if TYPE_CHECKING:
     import anthropic
 
 DEFAULT_ANTHROPIC_MODEL = "claude-opus-5"
-_DEFAULT_MAX_TOKENS = 2048
+# On current Claude models (Opus 5+) adaptive thinking is on by default and
+# max_tokens caps thinking + response text *together* — a cap sized for the
+# short visible answer alone truncates once the model spends its thinking
+# budget, and the truncation discipline below then fails the build.
+_DEFAULT_MAX_TOKENS = 16000
 
 
 class AnthropicProvider:
