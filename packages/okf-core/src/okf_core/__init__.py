@@ -41,6 +41,7 @@ from okf_core.pipeline import (
     check_reproducibility,
 )
 from okf_core.provider import (
+    DEFAULT_GENERATION_VERSION,
     GENERATOR_VERSION,
     ModelProvider,
     StubModelProvider,
@@ -52,6 +53,7 @@ from okf_core.revision import read_current_revision_id, revision_dir
 from okf_core.viz import build_graph, render_html, write_viz
 
 __all__ = [
+    "DEFAULT_GENERATION_VERSION",
     "GENERATOR_VERSION",
     "KNOWN_KEY_ORDER",
     "STATUS_VALUES",

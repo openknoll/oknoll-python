@@ -328,6 +328,7 @@ def build() -> None:
             project_name=config.name,
             sources=sources,
             provider=provider,
+            generation_version=config.generation_version,
         )
     except (PipelineError, ConnectorError, ProviderError) as exc:
         raise _fail(f"oknoll build: {exc}") from exc
@@ -639,6 +640,7 @@ def diff(
             project_name=config.name,
             sources=sources,
             provider=provider,
+            generation_version=config.generation_version,
         )
     except (PipelineError, ConnectorError, ProviderError) as exc:
         raise _fail(f"oknoll diff: {exc}") from exc
