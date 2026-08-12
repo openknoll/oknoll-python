@@ -15,6 +15,40 @@ _SCOPE_NOTE = (
     "blinding, no statistical tests, and no general superiority claims."
 )
 
+# USD per million tokens (input, output) at public list rates, keyed by the
+# provider id recorded in the results. Cost columns render "-" for providers
+# not listed here (the stub, unknown models) rather than fabricating a number.
+_PRICING_USD_PER_MTOK: dict[str, tuple[float, float]] = {
+    "anthropic:claude-fable-5": (10.00, 50.00),
+    "anthropic:claude-opus-5": (5.00, 25.00),
+    "anthropic:claude-opus-4-8": (5.00, 25.00),
+    "anthropic:claude-opus-4-7": (5.00, 25.00),
+    "anthropic:claude-opus-4-6": (5.00, 25.00),
+    "anthropic:claude-sonnet-5": (3.00, 15.00),
+    "anthropic:claude-sonnet-4-6": (3.00, 15.00),
+    "anthropic:claude-haiku-4-5": (1.00, 5.00),
+}
+
+
+def _row_cost_usd(row: dict[str, Any], pricing: tuple[float, float] | None) -> float | None:
+    """List-price cost of one row's answer call; None when unpriceable.
+
+    Abstentions make no model call and genuinely cost $0.00; a priced model
+    with missing usage on an answered row is unpriceable, not free.
+    """
+    if pricing is None:
+        return None
+    if row["abstained"]:
+        return 0.0
+    usage = row.get("model_usage")
+    if not isinstance(usage, dict):
+        return None
+    input_rate, output_rate = pricing
+    return (
+        int(usage.get("input_tokens", 0)) * input_rate
+        + int(usage.get("output_tokens", 0)) * output_rate
+    ) / 1_000_000
+
 
 def _median(values: list[int]) -> int:
     if not values:
@@ -72,6 +106,14 @@ def render_report(results: dict[str, Any]) -> str:
     )
     lines.append(
         per_condition(
+            "gold evidence retrieved",
+            lambda c: _rate(
+                sum(1 for r in rows_for(c) if r.get("retrieval_hit")), len(rows_for(c))
+            ),
+        )
+    )
+    lines.append(
+        per_condition(
             "abstention appropriate",
             lambda c: _rate(
                 sum(1 for r in rows_for(c) if r["abstention_appropriate"]), len(rows_for(c))
@@ -105,12 +147,23 @@ def render_report(results: dict[str, Any]) -> str:
         )
     )
 
+    pricing = _PRICING_USD_PER_MTOK.get(str(results["model"]))
+
+    def condition_cost(condition: str) -> str:
+        costs = [_row_cost_usd(r, pricing) for r in rows_for(condition)]
+        if not costs or any(c is None for c in costs):
+            return "-"
+        return f"${sum(c for c in costs if c is not None):.4f}"
+
+    lines.append(per_condition("est. cost (USD, list price)", condition_cost))
+
     lines += [
         "",
         "## Per-question",
         "",
-        "| question | class | condition | abstained | gold hit | tokens | tools | cited |",
-        "|---|---|---|---|---|---|---|---|",
+        "| question | class | condition | abstained | gold hit | retrieved | tokens | tools "
+        "| cited |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         cited = ", ".join(f"`{p}`" for p in row["cited_paths"]) or "-"
@@ -118,6 +171,7 @@ def render_report(results: dict[str, Any]) -> str:
             f"| {row['question_id']} | {row['class']} | {row['condition']} "
             f"| {'yes' if row['abstained'] else 'no'} "
             f"| {'yes' if row['gold_hit'] else 'no'} "
+            f"| {'yes' if row.get('retrieval_hit') else 'no'} "
             f"| {row['spent_tokens']} | {row['tool_calls']} | {cited} |"
         )
     lines.append("")

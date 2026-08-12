@@ -135,3 +135,25 @@ def test_close_releases_the_http_client() -> None:
         "llama3", transport=httpx.MockTransport(lambda r: httpx.Response(200))
     )
     provider.close()
+
+
+def test_last_usage_from_eval_counts_and_none_when_absent() -> None:
+    def with_counts(request: httpx.Request) -> httpx.Response:
+        body = _chat_body("A grounded description.")
+        body["prompt_eval_count"] = 42
+        body["eval_count"] = 7
+        return httpx.Response(200, json=body)
+
+    provider = OllamaProvider("llama3", transport=httpx.MockTransport(with_counts))
+    before = provider.last_usage
+    assert before is None  # no call yet
+    provider.complete("concept-description", CONCEPT_PAYLOAD)
+    after = provider.last_usage
+    assert after == {"input_tokens": 42, "output_tokens": 7}
+
+    bare = OllamaProvider(
+        "llama3",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, json=_chat_body("No counts."))),
+    )
+    bare.complete("concept-description", CONCEPT_PAYLOAD)
+    assert bare.last_usage is None  # Ollama omitted the counts — never fabricate

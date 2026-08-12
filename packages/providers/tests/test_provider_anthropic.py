@@ -219,6 +219,42 @@ def test_fallback_served_model_is_recorded(capsys: pytest.CaptureFixture[str]) -
     assert provider2.served_model_id == provider2.id
 
 
+def test_last_usage_records_token_accounting_and_resets_on_failure() -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200, json=_message_body(["An answer."]))
+        return httpx.Response(200, json=_message_body(["partial"], stop_reason="max_tokens"))
+
+    provider = _provider_with(httpx.MockTransport(handler))
+    before = provider.last_usage
+    assert before is None  # no call yet
+    provider.complete("answer-question", ANSWER_PAYLOAD)
+    after = provider.last_usage
+    assert after == {"input_tokens": 10, "output_tokens": 5}
+    with pytest.raises(ProviderError, match="truncated"):
+        provider.complete("answer-question", ANSWER_PAYLOAD)
+    assert provider.last_usage is None  # a failed call never leaks the previous usage
+
+
+def test_last_usage_folds_cache_tokens_into_input() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = _message_body(["An answer."])
+        body["usage"] = {
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 3,
+            "cache_creation_input_tokens": 2,
+        }
+        return httpx.Response(200, json=body)
+
+    provider = _provider_with(httpx.MockTransport(handler))
+    provider.complete("answer-question", ANSWER_PAYLOAD)
+    assert provider.last_usage == {"input_tokens": 15, "output_tokens": 5}
+
+
 def test_whole_fallback_chain_refusal_still_raises() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = _message_body([], stop_reason="refusal")
