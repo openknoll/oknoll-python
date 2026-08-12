@@ -50,6 +50,7 @@ from okf_core.provider import (
     resolve_provider,
 )
 from okf_core.rag import EmbeddingProvider, StubEmbeddingProvider, resolve_embedder
+from okf_core.revdiff import RevisionDiffError, diff_revisions
 from okf_core.revision import read_current_revision_id, revision_dir
 from okf_core.viz import build_graph, render_html, write_viz
 
@@ -83,6 +84,7 @@ __all__ = [
     "ParsedDocument",
     "PipelineError",
     "PipelineSource",
+    "RevisionDiffError",
     "Severity",
     "SourceRef",
     "StubEmbeddingProvider",
@@ -93,6 +95,7 @@ __all__ = [
     "build_link_graph",
     "build_revision",
     "check_reproducibility",
+    "diff_revisions",
     "ensure_index",
     "generation_cache_key",
     "generation_timestamp_key",

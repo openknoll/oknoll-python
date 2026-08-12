@@ -39,6 +39,8 @@ OpenKnoll's answer is a compile step with a contract on the output:
   the exact commit SHA, and every source carries a content hash.
 - **Revisions are immutable** — content-derived revision ids, idempotent rebuilds, and
   `oknoll diff --check` proves a rebuild reproduces the published revision byte for byte.
+  `oknoll diff rev-a rev-b` reports what changed between two revisions in knowledge
+  terms: concepts added or retitled, sources re-pinned, link edges moved.
 - **Navigation is deterministic** — agents explore through seven bounded, read-only tools
   (`overview`, `list`, `search`, `peek`, `read`, `links`, `history`), answer only from
   what they retrieved, cite bundle paths, surface trust warnings (draft, unverified), and

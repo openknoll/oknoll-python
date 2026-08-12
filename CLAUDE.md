@@ -23,7 +23,8 @@ behavior.
 - **Published revisions are immutable.** A rebuild writes a new revision directory and
   atomically advances the current pointer.
 - **The CLI surface is frozen**: `init`, `add`, `build`, `lint`, `ask`,
-  `chat`, `serve --mcp`, `pack`, `diff --check`, `plugin`, `login`, `keys`, `eval`,
+  `chat`, `serve --mcp`, `pack`, `diff` (`--check` reproducibility gate; `rev-a
+  rev-b` semantic revision diff added 2026-08-12), `plugin`, `login`, `keys`, `eval`,
   `viz` (added 2026-08-09: renders the link graph to one self-contained offline
   HTML file), `config`, `doctor` (added 2026-08-09: machine-level config surface
   over `~/.oknoll/` — `login`/`keys` stay reserved for the hosted control plane).

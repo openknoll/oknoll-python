@@ -14,6 +14,7 @@ import json
 import os
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import typer
 from okf_core import (
@@ -23,11 +24,13 @@ from okf_core import (
     ModelProvider,
     PipelineError,
     PipelineSource,
+    RevisionDiffError,
     Severity,
     SourceRef,
     answer_question,
     build_revision,
     check_reproducibility,
+    diff_revisions,
     lint_bundle,
     pack_bundle,
     read_current_revision_id,
@@ -622,34 +625,115 @@ def viz(
 
 @app.command()
 def diff(
+    rev_a: str | None = typer.Argument(None, metavar="[REV_A]", help="Base revision id."),
+    rev_b: str | None = typer.Argument(
+        None, metavar="[REV_B]", help="Target revision id (default: the current revision)."
+    ),
     check: bool = typer.Option(
         False, "--check", help="Rebuild to temp and report reproducibility drift."
     ),
+    json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
 ) -> None:
-    """Report reproducibility drift; non-zero exit for CI."""
-    if not check:
-        typer.secho("oknoll diff: only --check is supported", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=2)
+    """Semantic diff between two revisions, or reproducibility drift with --check."""
+    if check:
+        if rev_a is not None or rev_b is not None:
+            raise _fail("oknoll diff: --check takes no revision arguments")
+        config = _load_project()
+        provider = _provider_for(config)
+        sources = _pipeline_sources(config)
+        try:
+            current, drift = check_reproducibility(
+                bundle_dir=config.bundle_path,
+                project_name=config.name,
+                sources=sources,
+                provider=provider,
+                generation_version=config.generation_version,
+            )
+        except (PipelineError, ConnectorError, ProviderError) as exc:
+            raise _fail(f"oknoll diff: {exc}") from exc
 
+        if drift:
+            for path, kind in drift:
+                typer.secho(f"drift    {kind:24} {path}", fg=typer.colors.RED)
+            raise _fail(
+                f"rebuild does not reproduce revision {current} ({len(drift)} file(s) drift)"
+            )
+        typer.secho(f"reproducible — rebuild matches revision {current}", fg=typer.colors.GREEN)
+        return
+
+    if rev_a is None:
+        raise _fail("oknoll diff: give a revision id (optionally two), or --check")
     config = _load_project()
-    provider = _provider_for(config)
-    sources = _pipeline_sources(config)
+    target = rev_b if rev_b is not None else read_current_revision_id(config.bundle_path)
+    if target is None:
+        raise _fail("oknoll diff: no published revision to compare against")
     try:
-        current, drift = check_reproducibility(
-            bundle_dir=config.bundle_path,
-            project_name=config.name,
-            sources=sources,
-            provider=provider,
-            generation_version=config.generation_version,
-        )
-    except (PipelineError, ConnectorError, ProviderError) as exc:
+        report = diff_revisions(config.bundle_path, rev_a, target)
+    except RevisionDiffError as exc:
         raise _fail(f"oknoll diff: {exc}") from exc
+    if json_output:
+        typer.echo(json.dumps(report, indent=2))
+        return
+    _render_revision_diff(report)
 
-    if drift:
-        for path, kind in drift:
-            typer.secho(f"drift    {kind:24} {path}", fg=typer.colors.RED)
-        raise _fail(f"rebuild does not reproduce revision {current} ({len(drift)} file(s) drift)")
-    typer.secho(f"reproducible — rebuild matches revision {current}", fg=typer.colors.GREEN)
+
+def _render_revision_diff(report: dict[str, object]) -> None:
+    """Human-readable revision diff: role-classified counts, then the entries."""
+    typer.echo(f"{report['rev_a']} → {report['rev_b']}")
+    files: Any = report["files"]
+    concepts: Any = report["concepts"]
+    references: Any = report["references"]
+    links: Any = report["links"]
+    if not any((*files.values(), *links.values())):
+        typer.echo("no content differences")
+        return
+
+    retitled = sum(1 for entry in concepts["changed"] if entry["retitled"])
+    repinned = sum(1 for entry in references["changed"] if entry["repinned"])
+    typer.echo(
+        f"concepts    {len(concepts['added'])} added, {len(concepts['removed'])} removed, "
+        f"{len(concepts['changed'])} changed ({retitled} retitled)"
+    )
+    for entry in concepts["added"]:
+        typer.echo(f"  + {entry['path']} — {entry['title']}")
+    for entry in concepts["removed"]:
+        typer.echo(f"  - {entry['path']} — {entry['title']}")
+    for entry in concepts["changed"]:
+        note = (
+            f" (retitled: {entry['title_a']!r} → {entry['title_b']!r})" if entry["retitled"] else ""
+        )
+        typer.echo(f"  ~ {entry['path']}{note}")
+
+    typer.echo(
+        f"references  {len(references['added'])} added, {len(references['removed'])} removed, "
+        f"{len(references['changed'])} changed ({repinned} repinned)"
+    )
+    for entry in references["added"]:
+        typer.echo(f"  + {entry['path']} — {entry['title']}")
+    for entry in references["removed"]:
+        typer.echo(f"  - {entry['path']} — {entry['title']}")
+    for entry in references["changed"]:
+        what = [
+            label
+            for label, flag in (
+                ("uri", entry["uri_changed"]),
+                ("source_hash", entry["source_hash_changed"]),
+            )
+            if flag
+        ]
+        note = f" (repinned: {', '.join(what)})" if what else ""
+        typer.echo(f"  ~ {entry['path']}{note}")
+
+    typer.echo(f"links       {len(links['added'])} added, {len(links['removed'])} removed")
+    for src, dst in links["added"]:
+        typer.echo(f"  + {src} → {dst}")
+    for src, dst in links["removed"]:
+        typer.echo(f"  - {src} → {dst}")
+
+    typer.echo(
+        f"files       {len(files['added'])} added, {len(files['removed'])} removed, "
+        f"{len(files['changed'])} changed"
+    )
 
 
 @app.command()
