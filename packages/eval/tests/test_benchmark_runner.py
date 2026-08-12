@@ -102,10 +102,11 @@ def test_gold_evidence_and_abstention_scoring(spec: Path) -> None:
     assert rows[("q03", "rag")]["abstention_appropriate"] is rows[("q03", "rag")]["abstained"]
 
 
-def test_retrieval_recall_and_model_usage_scoring(spec: Path) -> None:
+def test_retrieval_directness_and_model_usage_scoring(spec: Path) -> None:
     rows = {(r["question_id"], r["condition"]): r for r in _run(spec)["rows"]}
 
-    # Gold evidence reaching the evidence set is scored independently of citing it.
+    # The gold *file itself* reached the evidence set (directness, not recall —
+    # the golden bundles list gold as concepts too, so PD scores direct here).
     assert rows[("q01", "pd")]["retrieval_hit"] is True
     assert rows[("q02", "pd")]["retrieval_hit"] is True
     # An abstention retrieved nothing, so it cannot have retrieved gold.
@@ -127,7 +128,7 @@ def test_report_renders_the_descriptive_table(spec: Path) -> None:
     assert "Descriptive comparison only" in report
     assert "| metric | pd | rag |" in report
     assert "gold-evidence hit" in report
-    assert "gold evidence retrieved" in report
+    assert "gold file retrieved directly" in report
     assert "| q01 | multi-hop | pd |" in report
     assert "no statistical tests" in report
     # The stub is unpriced: the cost row renders "-", never a fabricated $0.

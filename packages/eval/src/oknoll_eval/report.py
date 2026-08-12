@@ -104,9 +104,13 @@ def render_report(results: dict[str, Any]) -> str:
             lambda c: _rate(sum(1 for r in rows_for(c) if r["gold_hit"]), len(rows_for(c))),
         )
     )
+    # Directness, not recall: the gold *file itself* reached the evidence set.
+    # PD navigates concepts and reaches gold via their recorded provenance
+    # (scored by "gold-evidence hit" above), so a low direct rate for PD next
+    # to a high hit rate is the architecture, not a retrieval failure.
     lines.append(
         per_condition(
-            "gold evidence retrieved",
+            "gold file retrieved directly",
             lambda c: _rate(
                 sum(1 for r in rows_for(c) if r.get("retrieval_hit")), len(rows_for(c))
             ),

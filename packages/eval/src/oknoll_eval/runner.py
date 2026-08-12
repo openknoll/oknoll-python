@@ -72,8 +72,12 @@ def run_benchmark(
                     "abstention_appropriate": result.abstained
                     == (question.klass == "unanswerable"),
                     "gold_hit": bool(gold & (set(cited_paths) | set(cited_resources))),
-                    # Retrieval recall: gold evidence reached the evidence set,
-                    # whether or not the answer went on to cite it.
+                    # The gold file *itself* reached the evidence set. Citations
+                    # mirror the evidence set in both conditions, so this is a
+                    # directness measure, not independent recall: RAG retrieves
+                    # reference files (the form gold evidence is written in),
+                    # while PD retrieves concepts and reaches gold through their
+                    # provenance — which gold_hit above credits via resources.
                     "retrieval_hit": bool(gold & set(evidence_paths)),
                     "cited_paths": cited_paths,
                     "cited_resources": cited_resources,
