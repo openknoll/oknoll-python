@@ -64,7 +64,8 @@ oknoll eval spec.toml --model anthropic --embedder ollama:nomic-embed-text
 CI runs stay on the deterministic stub (`--model stub --embedder stub`);
 published numbers come from manual runs against real providers, with full
 provenance (revision ids, model, embedder, prompt versions) captured in the
-results JSON.
+results JSON. Published runs live next to this file — see `RESULTS.md` and
+`results-claude-sonnet-5/`.
 
 ## Question design
 

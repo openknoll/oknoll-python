@@ -1,0 +1,1978 @@
+{
+  "schema_version": 2,
+  "benchmark": "okb-pub-v1",
+  "benchmark_file": "spec.toml",
+  "conditions": [
+    "pd",
+    "rag"
+  ],
+  "model": "anthropic:claude-sonnet-5",
+  "embedder": "ollama:nomic-embed-text",
+  "revisions": {
+    "handbook": "rev-6d9343b3e29b",
+    "ripgrep": "rev-6a0aa0b63a08"
+  },
+  "okf_core_version": "0.3.1",
+  "generator_version": "3",
+  "prompt_versions": {
+    "concept-description": "1",
+    "concept-plan": "1",
+    "answer-question": "1"
+  },
+  "questions": 26,
+  "rows": [
+    {
+      "question_id": "q01",
+      "bundle": "handbook",
+      "class": "lookup",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/trello.md",
+        "concepts/term-extensions.md",
+        "concepts/account-manager.md",
+        "concepts/digital-council.md"
+      ],
+      "cited_resources": [
+        "references/source-008.md",
+        "references/source-057.md",
+        "references/source-123.md",
+        "references/source-207.md"
+      ],
+      "evidence_paths": [
+        "concepts/trello.md",
+        "concepts/term-extensions.md",
+        "concepts/account-manager.md",
+        "concepts/digital-council.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 15,
+      "spent_tokens": 7274,
+      "spent_chars": 29096,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 633,
+        "output_tokens": 82
+      },
+      "latency_ms": 3700,
+      "answer": "Trello has been decommissioned agency-wide at GSA effective September 1, 2025; after that date, existing Trello boards and cards will no longer be accessible, so any needed artifacts must be exported before the cutoff [concepts/trello.md]."
+    },
+    {
+      "question_id": "q01",
+      "bundle": "handbook",
+      "class": "lookup",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-207.md",
+        "references/source-066.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/collaboration-tools.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/tools/trello.md"
+      ],
+      "evidence_paths": [
+        "references/source-207.md",
+        "references/source-066.md",
+        "references/source-207.md",
+        "references/source-066.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 356,
+      "spent_chars": 1425,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 729,
+        "output_tokens": 146
+      },
+      "latency_ms": 37347,
+      "answer": "Trello was decommissioned agency-wide effective **September 1, 2025**; after that date, existing Trello boards and cards will no longer be accessible [references/source-207.md]. Anyone needing to retain Trello content must export it beforehand, using JSON format (not CSV) to preserve full board content including comments [references/source-207.md]. GSA IT has not designated a single official replacement, though alternatives are suggested [references/source-207.md]."
+    },
+    {
+      "question_id": "q02",
+      "bundle": "handbook",
+      "class": "lookup",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/security-incidents.md",
+        "concepts/authority-to-use-atu-process.md",
+        "concepts/account-manager.md",
+        "concepts/github.md"
+      ],
+      "cited_resources": [
+        "references/source-008.md",
+        "references/source-094.md",
+        "references/source-099.md",
+        "references/source-180.md"
+      ],
+      "evidence_paths": [
+        "concepts/security-incidents.md",
+        "concepts/authority-to-use-atu-process.md",
+        "concepts/account-manager.md",
+        "concepts/github.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 11,
+      "spent_tokens": 6288,
+      "spent_chars": 25153,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 722,
+        "output_tokens": 132
+      },
+      "latency_ms": 3111,
+      "answer": "The provided evidence does not specify a required time frame for reporting a suspected IT security incident to GSA IT—it only describes how to report (via the incident-response Slack channel or by emailing IT Service Desk/GSA IR Team/TTS Tech Operations) [concepts/security-incidents.md]. None of the passages state a specific reporting deadline, so I can't answer that part of the question without more information."
+    },
+    {
+      "question_id": "q02",
+      "bundle": "handbook",
+      "class": "lookup",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-099.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/tech-policies/security-incidents.md"
+      ],
+      "evidence_paths": [
+        "references/source-099.md",
+        "references/source-099.md",
+        "references/source-099.md",
+        "references/source-099.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 443,
+      "spent_chars": 1774,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 856,
+        "output_tokens": 39
+      },
+      "latency_ms": 3395,
+      "answer": "A suspected IT security incident must be reported to GSA IT within 1 hour of identification [references/source-099.md]."
+    },
+    {
+      "question_id": "q03",
+      "bundle": "handbook",
+      "class": "lookup",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/transit-benefit.md",
+        "concepts/benefits.md",
+        "concepts/chicago.md",
+        "concepts/going-out-of-office.md"
+      ],
+      "cited_resources": [
+        "references/source-065.md",
+        "references/source-079.md",
+        "references/source-103.md",
+        "references/source-223.md"
+      ],
+      "evidence_paths": [
+        "concepts/transit-benefit.md",
+        "concepts/benefits.md",
+        "concepts/chicago.md",
+        "concepts/going-out-of-office.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 11,
+      "spent_tokens": 6385,
+      "spent_chars": 25541,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 562,
+        "output_tokens": 89
+      },
+      "latency_ms": 3371,
+      "answer": "The evidence provided does not contain the answer—none of the passages specify an Organization Code for the Transit Benefit Program Application. The Transit Benefit information available [concepts/transit-benefit.md] only covers cancelling the benefit, not the application process or organization code details."
+    },
+    {
+      "question_id": "q03",
+      "bundle": "handbook",
+      "class": "lookup",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-079.md",
+        "references/source-103.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/employee-resources-policies/transit-benefit.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/getting-started/classes/benefits.md"
+      ],
+      "evidence_paths": [
+        "references/source-079.md",
+        "references/source-079.md",
+        "references/source-103.md",
+        "references/source-079.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 410,
+      "spent_chars": 1640,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 815,
+        "output_tokens": 58
+      },
+      "latency_ms": 2291,
+      "answer": "TTS team members should select **Q - Federal Acquisition Service** as the Organization Code when filling out the \"Transit Benefit Program Application\" [references/source-079.md]."
+    },
+    {
+      "question_id": "q04",
+      "bundle": "handbook",
+      "class": "lookup",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/account-manager.md",
+        "concepts/git-signing.md",
+        "concepts/edit-in-github.md",
+        "concepts/github.md"
+      ],
+      "cited_resources": [
+        "references/source-008.md",
+        "references/source-179.md",
+        "references/source-180.md",
+        "references/source-245.md"
+      ],
+      "evidence_paths": [
+        "concepts/account-manager.md",
+        "concepts/git-signing.md",
+        "concepts/edit-in-github.md",
+        "concepts/github.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 9,
+      "spent_tokens": 5196,
+      "spent_chars": 20785,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 575,
+        "output_tokens": 82
+      },
+      "latency_ms": 3652,
+      "answer": "The evidence provided does not support an answer to this question. None of the passages mention a specific password manager or its installation source—they only reference general topics like account manager, git signing, editing in GitHub, and GitHub itself, without detailing any recommended password management tool."
+    },
+    {
+      "question_id": "q04",
+      "bundle": "handbook",
+      "class": "lookup",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-096.md",
+        "references/source-125.md",
+        "references/source-111.md",
+        "references/source-109.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/tech-policies/password-requirements.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/getting-started/equipment.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/getting-started/index.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/launching-software/infrastructure.md"
+      ],
+      "evidence_paths": [
+        "references/source-096.md",
+        "references/source-125.md",
+        "references/source-111.md",
+        "references/source-109.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 368,
+      "spent_chars": 1474,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 727,
+        "output_tokens": 149
+      },
+      "latency_ms": 3457,
+      "answer": "The evidence provided does not name a specific password manager or its installation source. Passage 1 [references/source-096.md] only states the general requirement to \"use a password manager\" as part of TTS password policy, without identifying which product is recommended or where to install it. The other passages (infrastructure controls, handbook index, and equipment guide) do not supply this detail either, so I cannot answer definitively—additional evidence specifying the recommended tool and its download/install location would be needed."
+    },
+    {
+      "question_id": "q05",
+      "bundle": "handbook",
+      "class": "synthesis",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/password-requirements.md",
+        "concepts/reasonable-accommodations.md",
+        "concepts/how-to-log-in.md",
+        "concepts/equipment.md"
+      ],
+      "cited_resources": [
+        "references/source-088.md",
+        "references/source-096.md",
+        "references/source-109.md",
+        "references/source-110.md"
+      ],
+      "evidence_paths": [
+        "concepts/password-requirements.md",
+        "concepts/reasonable-accommodations.md",
+        "concepts/how-to-log-in.md",
+        "concepts/equipment.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 15,
+      "spent_tokens": 8556,
+      "spent_chars": 34227,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 659,
+        "output_tokens": 91
+      },
+      "latency_ms": 3416,
+      "answer": "The three requirements for making passwords at TTS are: use a password manager, use unique passwords, and use stronger passwords [concepts/password-requirements.md]. The evidence provided only states these three requirements by name but does not include further detail on what each one specifically involves beyond this listing."
+    },
+    {
+      "question_id": "q05",
+      "bundle": "handbook",
+      "class": "synthesis",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-096.md",
+        "references/source-109.md",
+        "references/source-125.md",
+        "references/source-105.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/tech-policies/password-requirements.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/getting-started/classes/intro-to-TTS-Tech-Portfolio.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/getting-started/equipment.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/launching-software/infrastructure.md"
+      ],
+      "evidence_paths": [
+        "references/source-096.md",
+        "references/source-109.md",
+        "references/source-125.md",
+        "references/source-105.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 389,
+      "spent_chars": 1558,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 751,
+        "output_tokens": 119
+      },
+      "latency_ms": 4313,
+      "answer": "The three requirements for making passwords at TTS are: use a password manager, use unique passwords, and use stronger passwords [references/source-096.md]. The provided evidence names the first requirement explicitly—using a password manager—but does not include further detail on what \"use unique passwords\" or \"use stronger passwords\" specifically involve, so I can't provide those details without additional passages."
+    },
+    {
+      "question_id": "q06",
+      "bundle": "handbook",
+      "class": "synthesis",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/github.md",
+        "concepts/gsa-internal-tools.md",
+        "concepts/handbook-implementation-plan-q2-fy-2025-issue-backlog.md",
+        "concepts/accessibility.md"
+      ],
+      "cited_resources": [
+        "references/source-001.md",
+        "references/source-102.md",
+        "references/source-104.md",
+        "references/source-180.md"
+      ],
+      "evidence_paths": [
+        "concepts/github.md",
+        "concepts/gsa-internal-tools.md",
+        "concepts/handbook-implementation-plan-q2-fy-2025-issue-backlog.md",
+        "concepts/accessibility.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 9,
+      "spent_tokens": 5363,
+      "spent_chars": 21455,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 703,
+        "output_tokens": 150
+      },
+      "latency_ms": 3735,
+      "answer": "The evidence provided does not describe digital whiteboarding tools at TTS—none of the passages (on GitHub, GSA internal tools, the Handbook implementation backlog, or accessibility) mention whiteboarding software, a prior tool, a replacement, or reasons for a change. To answer this question, I would need a passage specifically addressing whiteboarding tools (e.g., something like Mural, Miro, or similar) and the rationale for switching between them."
+    },
+    {
+      "question_id": "q06",
+      "bundle": "handbook",
+      "class": "synthesis",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-066.md",
+        "references/source-134.md",
+        "references/source-057.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/about-us/digital-council.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/collaboration-tools.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/office-of-operations/blogging.md"
+      ],
+      "evidence_paths": [
+        "references/source-066.md",
+        "references/source-134.md",
+        "references/source-066.md",
+        "references/source-057.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 493,
+      "spent_chars": 1974,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 885,
+        "output_tokens": 190
+      },
+      "latency_ms": 3339,
+      "answer": "At TTS, Mural was previously used as the digital whiteboarding tool, and as of early 2025 TTS is transitioning to Figma's FigJam as the new recommended tool. FigJam is already in active use at TTS and supports sticky-note style collaboration, templates, and integrations similar to what teams used in Mural [references/source-066.md]. The evidence provided notes that Figma is working toward FedRAMP Moderate authorization, which appears relevant to the change, but it does not explicitly state the full reasoning behind the switch away from Mural [references/source-066.md]."
+    },
+    {
+      "question_id": "q07",
+      "bundle": "handbook",
+      "class": "multi-hop",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/paid-parental-leave.md",
+        "concepts/fmla.md",
+        "concepts/tock.md",
+        "concepts/leave.md"
+      ],
+      "cited_resources": [
+        "references/source-053.md",
+        "references/source-222.md",
+        "references/source-225.md",
+        "references/source-227.md"
+      ],
+      "evidence_paths": [
+        "concepts/paid-parental-leave.md",
+        "concepts/fmla.md",
+        "concepts/tock.md",
+        "concepts/leave.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 15,
+      "spent_tokens": 8538,
+      "spent_chars": 34154,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 824,
+        "output_tokens": 129
+      },
+      "latency_ms": 2497,
+      "answer": "The evidence provided does not contain the specific Tock line item name for paid parental leave. Passage 3 [concepts/tock.md] only explains that Tock tracks how time is spent for partner billing purposes, without listing specific line items, and none of the other passages specify which Tock code corresponds to PPL. To answer accurately, information such as the actual Tock leave/time-off category names would be needed."
+    },
+    {
+      "question_id": "q07",
+      "bundle": "handbook",
+      "class": "multi-hop",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-227.md",
+        "references/source-225.md",
+        "references/source-206.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/tools/tock.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/travel-and-leave/leave.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/travel-and-leave/paid-parental-leave.md"
+      ],
+      "evidence_paths": [
+        "references/source-227.md",
+        "references/source-225.md",
+        "references/source-206.md",
+        "references/source-206.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 413,
+      "spent_chars": 1654,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 783,
+        "output_tokens": 47
+      },
+      "latency_ms": 2191,
+      "answer": "Paid parental leave counts as out-of-office time, so it should be billed to Tock line #670, Out of Office [references/source-206.md]."
+    },
+    {
+      "question_id": "q08",
+      "bundle": "handbook",
+      "class": "multi-hop",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/mural.md",
+        "concepts/how-we-relate-to-partners.md",
+        "concepts/gsa-internal-tools.md",
+        "concepts/handbook-implementation-plan-q2-fy-2025-issue-backlog.md"
+      ],
+      "cited_resources": [
+        "references/source-001.md",
+        "references/source-030.md",
+        "references/source-104.md",
+        "references/source-187.md"
+      ],
+      "evidence_paths": [
+        "concepts/mural.md",
+        "concepts/how-we-relate-to-partners.md",
+        "concepts/gsa-internal-tools.md",
+        "concepts/handbook-implementation-plan-q2-fy-2025-issue-backlog.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 13,
+      "spent_tokens": 7630,
+      "spent_chars": 30520,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 833,
+        "output_tokens": 107
+      },
+      "latency_ms": 3643,
+      "answer": "The evidence provided does not name a replacement tool for Mural or explain how to obtain access to it — none of the passages mention a Mural replacement or its TTS organization access process. To answer this fully, a passage specifically addressing the Mural replacement (e.g., a current whiteboarding/collaboration tool page) would be needed."
+    },
+    {
+      "question_id": "q08",
+      "bundle": "handbook",
+      "class": "multi-hop",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-066.md",
+        "references/source-187.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/collaboration-tools.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/tools/mural.md"
+      ],
+      "evidence_paths": [
+        "references/source-066.md",
+        "references/source-066.md",
+        "references/source-187.md",
+        "references/source-187.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 516,
+      "spent_chars": 2067,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 943,
+        "output_tokens": 173
+      },
+      "latency_ms": 3699,
+      "answer": "Mural has been replaced by Figma's FigJam as TTS's primary digital whiteboarding tool [references/source-066.md]. FigJam licenses are being provisioned to TTS users, with priority given to those with the most urgent needs [references/source-066.md]. The evidence does not specify a particular request process or Slack channel for obtaining FigJam access (unlike Mural, which had an \"admins-mural\" Slack channel for tracking organization membership [references/source-187.md]) — this detail is missing from the provided passages."
+    },
+    {
+      "question_id": "q09",
+      "bundle": "handbook",
+      "class": "multi-hop",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/olu.md",
+        "concepts/tock.md",
+        "concepts/tock-2.md",
+        "concepts/training.md"
+      ],
+      "cited_resources": [
+        "references/source-053.md",
+        "references/source-054.md",
+        "references/source-206.md",
+        "references/source-218.md"
+      ],
+      "evidence_paths": [
+        "concepts/olu.md",
+        "concepts/tock.md",
+        "concepts/tock-2.md",
+        "concepts/training.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 16,
+      "spent_tokens": 8451,
+      "spent_chars": 33804,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 738,
+        "output_tokens": 157
+      },
+      "latency_ms": 2593,
+      "answer": "Based on the evidence, mandatory training classes are hosted through GSA's Online University [concepts/training.md]. However, the evidence provided does not specify how time spent on these mandatory trainings should be coded in Tock — the Tock passages describe general billable hour expectations (e.g., 80% billable work) [concepts/tock-2.md] and differences between Tock and HRLinks timesheets [concepts/tock.md], but do not address coding for mandatory training time specifically."
+    },
+    {
+      "question_id": "q09",
+      "bundle": "handbook",
+      "class": "multi-hop",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-218.md",
+        "references/source-053.md",
+        "references/source-054.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/about-us/centers-of-excellence/operations/tock.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/about-us/centers-of-excellence/operations/training.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/training-and-development/olu.md"
+      ],
+      "evidence_paths": [
+        "references/source-218.md",
+        "references/source-053.md",
+        "references/source-054.md",
+        "references/source-054.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 384,
+      "spent_chars": 1538,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 707,
+        "output_tokens": 73
+      },
+      "latency_ms": 2302,
+      "answer": "The agency's mandatory training classes are hosted through OLU, and time spent taking these OLU trainings should be coded as `969 - GSA-mandated Non-Billable Work` in Tock [references/source-218.md]."
+    },
+    {
+      "question_id": "q10",
+      "bundle": "handbook",
+      "class": "trust",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/july-13-travel-guidance.md",
+        "concepts/hosting-non-government-speakers.md",
+        "concepts/conferences-events-training.md",
+        "concepts/meetings-and-meeting-tools.md"
+      ],
+      "cited_resources": [
+        "references/source-077.md",
+        "references/source-106.md",
+        "references/source-212.md",
+        "references/source-224.md"
+      ],
+      "evidence_paths": [
+        "concepts/july-13-travel-guidance.md",
+        "concepts/hosting-non-government-speakers.md",
+        "concepts/conferences-events-training.md",
+        "concepts/meetings-and-meeting-tools.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 15,
+      "spent_tokens": 8060,
+      "spent_chars": 32241,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 676,
+        "output_tokens": 190
+      },
+      "latency_ms": 3459,
+      "answer": "The provided evidence does not contain the actual guidance content on employee travel for conferences and training events—each passage only lists cross-references or links to a \"conferences events training\" page (e.g., [concepts/july-13-travel-guidance.md], [concepts/hosting-non-government-speakers.md], [concepts/meetings-and-meeting-tools.md]), and the dedicated passage itself [concepts/conferences-events-training.md] only points to an external GitHub source without including its text. To answer accurately, I would need the actual content of that conferences-events-training document rather than just its title and link."
+    },
+    {
+      "question_id": "q10",
+      "bundle": "handbook",
+      "class": "trust",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-224.md",
+        "references/source-239.md",
+        "references/source-133.md",
+        "references/source-212.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/office-of-operations/bizops.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/training-and-development/conferences-events-training.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/travel-and-leave/july-13-travel-guidance.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/travel-and-leave/travel-and-leave-policies/travel-guide-faq.md"
+      ],
+      "evidence_paths": [
+        "references/source-224.md",
+        "references/source-239.md",
+        "references/source-133.md",
+        "references/source-212.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 401,
+      "spent_chars": 1605,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 838,
+        "output_tokens": 336
+      },
+      "latency_ms": 6183,
+      "answer": "Employee travel for conferences and training events is currently **not authorized** under the new travel threshold guidance—specifically, \"all travel for conferences, related events and training do not meet this requirement and are not authorized\" [references/source-224.md]. Additional details on this threshold are available via linked GSA guidance [references/source-224.md]. That said, TTS more broadly \"encourages all staff to attend conferences, speak at events, and focus on professional development and training opportunities,\" and points staff to a Training Database to see what colleagues have attended, as well as separate guidance for speaking at events [references/source-212.md]. For getting travel approved specifically for a training, conference, speaking event, or other large in-person gathering, there is a dedicated FAQ process referenced in the travel guide, though the passage provided does not include the actual approval steps [references/source-239.md]. For further questions, staff can contact the Events & Training Management team (tts-events@gsa.gov) or the Travel team (tts-travel@gsa.gov) [references/source-133.md]."
+    },
+    {
+      "question_id": "q11",
+      "bundle": "handbook",
+      "class": "trust",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/003-tts-cybersecurity-advisor.md",
+        "concepts/hiring-authorities.md",
+        "concepts/roles-and-responsibilities.md",
+        "concepts/collaboration-tools.md"
+      ],
+      "cited_resources": [
+        "references/source-066.md",
+        "references/source-118.md",
+        "references/source-132.md",
+        "references/source-155.md"
+      ],
+      "evidence_paths": [
+        "concepts/003-tts-cybersecurity-advisor.md",
+        "concepts/hiring-authorities.md",
+        "concepts/roles-and-responsibilities.md",
+        "concepts/collaboration-tools.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 13,
+      "spent_tokens": 8562,
+      "spent_chars": 34248,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 643,
+        "output_tokens": 524
+      },
+      "latency_ms": 6895,
+      "answer": "Yes — TTS approved the addition of a Senior Cybersecurity Advisor role. The provenance is documented as RFC 003, titled \"TTS Senior Cybersecurity Advisor,\" with a status of approved and an approval date of 2021-08-05 [concepts/003-tts-cybersecurity-advisor.md]. The other passages provided (on hiring authorities, roles/responsibilities, and collaboration tools) do not contain further details on this specific role's creation, rationale, or current staffing status, so I cannot speak to those aspects beyond confirming the RFC's approval [concepts/hiring-authorities.md][concepts/roles-and-responsibilities.md][concepts/collaboration-tools.md]."
+    },
+    {
+      "question_id": "q11",
+      "bundle": "handbook",
+      "class": "trust",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-155.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/request-for-comments/003-tts-cybersecurity-advisor.md"
+      ],
+      "evidence_paths": [
+        "references/source-155.md",
+        "references/source-155.md",
+        "references/source-155.md",
+        "references/source-155.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 478,
+      "spent_chars": 1915,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 946,
+        "output_tokens": 264
+      },
+      "latency_ms": 5403,
+      "answer": "Yes — TTS decided to add a Senior Cybersecurity Advisor role, to be placed in the TTS Front Office [references/source-155.md]. The decision's provenance traces back to RFC 002, which received feedback across GSA with agreement that TTS should invest in security, and one of its conclusions was to create a TTS security lead position to coordinate security approaches/activities across TTS programs [references/source-155.md]. The proposed path forward explicitly states: \"ADD a Senior Cybersecurity Advisor in the TTS Front Office\" [references/source-155.md]. The evidence does not include an explicit final approval or implementation confirmation beyond this \"proposed path forward\" language, so the precise current status (e.g., whether it has been formally finalized/hired) is not specified in the provided passages."
+    },
+    {
+      "question_id": "q12",
+      "bundle": "handbook",
+      "class": "unanswerable",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": false,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/security-incidents.md",
+        "concepts/san-francisco.md",
+        "concepts/account-manager.md",
+        "concepts/glossary-2.md"
+      ],
+      "cited_resources": [
+        "references/source-008.md",
+        "references/source-083.md",
+        "references/source-089.md",
+        "references/source-099.md"
+      ],
+      "evidence_paths": [
+        "concepts/security-incidents.md",
+        "concepts/san-francisco.md",
+        "concepts/account-manager.md",
+        "concepts/glossary-2.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 11,
+      "spent_tokens": 6366,
+      "spent_chars": 25467,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 595,
+        "output_tokens": 98
+      },
+      "latency_ms": 3902,
+      "answer": "The evidence provided does not answer this question. None of the passages mention 18F being shut down or give any reason for such an event—they cover unrelated topics like the definition of \"availability\" for security incidents, bathroom locations in the San Francisco office, a reference to an account manager page, and a list of glossary resources."
+    },
+    {
+      "question_id": "q12",
+      "bundle": "handbook",
+      "class": "unanswerable",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": false,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "references/source-063.md",
+        "references/source-013.md",
+        "references/source-025.md",
+        "references/source-018.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/18f/history-and-values.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/18f/how-18f-works/client-accounts.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/18f/how-18f-works/state-local-agreements.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/business-and-ops-policies/igcap-october2016.md"
+      ],
+      "evidence_paths": [
+        "references/source-063.md",
+        "references/source-013.md",
+        "references/source-025.md",
+        "references/source-018.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 402,
+      "spent_chars": 1609,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 830,
+        "output_tokens": 123
+      },
+      "latency_ms": 4310,
+      "answer": "The evidence provided does not state when 18F was shut down or give a reason for its closure. The passages only mention a 2016 GSA Inspector General evaluation of 18F's management and operations practices, which required 18F to submit a Corrective Action Plan [references/source-063.md], but this is not information about a shutdown. No passage addresses 18F's shutdown date or rationale."
+    },
+    {
+      "question_id": "q13",
+      "bundle": "handbook",
+      "class": "unanswerable",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": false,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/security-policy.md",
+        "concepts/index-2.md",
+        "concepts/bug-bounty.md",
+        "concepts/responding-to-public-disclosure-vulnerabilities.md"
+      ],
+      "cited_resources": [
+        "references/source-007.md",
+        "references/source-040.md",
+        "references/source-092.md",
+        "references/source-098.md"
+      ],
+      "evidence_paths": [
+        "concepts/security-policy.md",
+        "concepts/index-2.md",
+        "concepts/bug-bounty.md",
+        "concepts/responding-to-public-disclosure-vulnerabilities.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 15,
+      "spent_tokens": 7464,
+      "spent_chars": 29856,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 666,
+        "output_tokens": 164
+      },
+      "latency_ms": 3038,
+      "answer": "The evidence provided does not name the current Administrator of the General Services Administration—the passages only reference GSA's Vulnerability Disclosure Program, its Centers of Excellence initiative, and bug bounty/disclosure policy links, none of which identify agency leadership [concepts/security-policy.md][concepts/index-2.md][concepts/bug-bounty.md][concepts/responding-to-public-disclosure-vulnerabilities.md]. I cannot answer this question from the given sources."
+    },
+    {
+      "question_id": "q13",
+      "bundle": "handbook",
+      "class": "unanswerable",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": false,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "references/source-103.md",
+        "references/source-083.md",
+        "references/source-082.md"
+      ],
+      "cited_resources": [
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/general-contacts.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/general-information-and-resources/glossary.md",
+        "https://github.com/gsa-tts/handbook/blob/c220f93896b39e9e4ab0f486a1d5bf346ac06e3e/pages/getting-started/classes/benefits.md"
+      ],
+      "evidence_paths": [
+        "references/source-103.md",
+        "references/source-083.md",
+        "references/source-083.md",
+        "references/source-082.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 462,
+      "spent_chars": 1850,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 888,
+        "output_tokens": 84
+      },
+      "latency_ms": 4072,
+      "answer": "The evidence provided does not name who currently serves as Administrator of the General Services Administration—none of the passages mention a specific person holding that role. To answer this, information about GSA leadership or the current Administrator's identity would be needed, which is missing from the given sources."
+    },
+    {
+      "question_id": "q14",
+      "bundle": "ripgrep",
+      "class": "lookup",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/faq.md",
+        "concepts/readme.md",
+        "concepts/guide.md",
+        "concepts/readme-7.md"
+      ],
+      "cited_resources": [
+        "references/source-005.md",
+        "references/source-006.md",
+        "references/source-007.md",
+        "references/source-014.md"
+      ],
+      "evidence_paths": [
+        "concepts/faq.md",
+        "concepts/readme.md",
+        "concepts/guide.md",
+        "concepts/readme-7.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 18,
+      "spent_tokens": 6205,
+      "spent_chars": 24821,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 788,
+        "output_tokens": 80
+      },
+      "latency_ms": 1764,
+      "answer": "The provided evidence does not answer this question. None of the passages mention an environment variable for locating ripgrep's configuration file (e.g., something like `RIPGREP_CONFIG_PATH`); this specific detail is missing from the given sources."
+    },
+    {
+      "question_id": "q14",
+      "bundle": "ripgrep",
+      "class": "lookup",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-006.md",
+        "references/source-007.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/GUIDE.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/README.md"
+      ],
+      "evidence_paths": [
+        "references/source-006.md",
+        "references/source-006.md",
+        "references/source-006.md",
+        "references/source-007.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 471,
+      "spent_chars": 1887,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 834,
+        "output_tokens": 83
+      },
+      "latency_ms": 9852,
+      "answer": "The `RIPGREP_CONFIG_PATH` environment variable tells ripgrep where to find its configuration file; you must set it to the file path of your config file, since ripgrep does not automatically look in any predetermined directory [references/source-006.md]."
+    },
+    {
+      "question_id": "q15",
+      "bundle": "ripgrep",
+      "class": "lookup",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/changelog.md",
+        "concepts/readme.md",
+        "concepts/faq.md",
+        "concepts/guide.md"
+      ],
+      "cited_resources": [
+        "references/source-003.md",
+        "references/source-005.md",
+        "references/source-006.md",
+        "references/source-007.md"
+      ],
+      "evidence_paths": [
+        "concepts/changelog.md",
+        "concepts/readme.md",
+        "concepts/faq.md",
+        "concepts/guide.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 11,
+      "spent_tokens": 4513,
+      "spent_chars": 18055,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 676,
+        "output_tokens": 129
+      },
+      "latency_ms": 3385,
+      "answer": "The evidence provided does not support an answer to this question. Passage 1, the CHANGELOG entry for 15.2.0, only mentions bug fixes related to gitignore matching and performance improvements in directory tree traversal—it does not mention any new target being added to release binaries [concepts/changelog.md]. None of the other passages (README, FAQ, GUIDE) address release binary targets either."
+    },
+    {
+      "question_id": "q15",
+      "bundle": "ripgrep",
+      "class": "lookup",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-003.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/CHANGELOG.md"
+      ],
+      "evidence_paths": [
+        "references/source-003.md",
+        "references/source-003.md",
+        "references/source-003.md",
+        "references/source-003.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 400,
+      "spent_chars": 1600,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 833,
+        "output_tokens": 53
+      },
+      "latency_ms": 1692,
+      "answer": "In version 15.2.0, ripgrep added `aarch64-unknown-linux-musl` as a new target included in its release binaries [references/source-003.md]."
+    },
+    {
+      "question_id": "q16",
+      "bundle": "ripgrep",
+      "class": "lookup",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/ai-policy.md",
+        "concepts/contributing.md",
+        "concepts/sherlock-nul.md"
+      ],
+      "cited_resources": [
+        "references/source-002.md",
+        "references/source-004.md",
+        "references/source-025.md"
+      ],
+      "evidence_paths": [
+        "concepts/ai-policy.md",
+        "concepts/contributing.md",
+        "concepts/sherlock-nul.md"
+      ],
+      "warnings": 6,
+      "tool_calls": 11,
+      "spent_tokens": 2638,
+      "spent_chars": 10552,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 373,
+        "output_tokens": 153
+      },
+      "latency_ms": 2897,
+      "answer": "The evidence provided does not contain the actual content of ripgrep's AI Policy—only a link to it [concepts/ai-policy.md] and a reference confirming that all AI use in contributions must comply with this policy [concepts/contributing.md]. The specific rules regarding autonomous AI agents (as opposed to general AI use) are not detailed in the passages given, so I cannot state the policy's specifics on that point. Passage 3 is unrelated to this topic."
+    },
+    {
+      "question_id": "q16",
+      "bundle": "ripgrep",
+      "class": "lookup",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-002.md",
+        "references/source-004.md",
+        "references/source-005.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/AI_POLICY.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/CONTRIBUTING.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/FAQ.md"
+      ],
+      "evidence_paths": [
+        "references/source-002.md",
+        "references/source-002.md",
+        "references/source-004.md",
+        "references/source-005.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 337,
+      "spent_chars": 1350,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 689,
+        "output_tokens": 178
+      },
+      "latency_ms": 4553,
+      "answer": "Autonomous AI agents are explicitly **not allowed** to contribute to ripgrep. The project requires a human in the loop who understands any AI-assisted work, and pull requests that appear to violate this policy will be closed, potentially without notice [references/source-002.md]. While using AI/LLMs as coding tools is otherwise welcomed—maintainers and contributors remain fully responsible for any published code [references/source-002.md]—all such contributions must adhere to this AI Policy, and any that don't will be closed [references/source-004.md]."
+    },
+    {
+      "question_id": "q17",
+      "bundle": "ripgrep",
+      "class": "lookup",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/ai-policy.md",
+        "concepts/readme.md",
+        "concepts/contributing.md",
+        "concepts/changelog.md"
+      ],
+      "cited_resources": [
+        "references/source-002.md",
+        "references/source-003.md",
+        "references/source-004.md",
+        "references/source-007.md"
+      ],
+      "evidence_paths": [
+        "concepts/ai-policy.md",
+        "concepts/readme.md",
+        "concepts/contributing.md",
+        "concepts/changelog.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 12,
+      "spent_tokens": 4798,
+      "spent_chars": 19193,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 643,
+        "output_tokens": 170
+      },
+      "latency_ms": 2808,
+      "answer": "The provided evidence does not address release scheduling or date commitments for ripgrep. None of the passages [concepts/ai-policy.md], [concepts/readme.md], [concepts/contributing.md], or [concepts/changelog.md] mention timelines, schedules, or dates for upcoming releases—they cover AI usage policy, a general project description, and links to the Contributing and CHANGELOG documents without excerpted content. To answer this question, evidence specifically discussing release planning or scheduling practices would be needed."
+    },
+    {
+      "question_id": "q17",
+      "bundle": "ripgrep",
+      "class": "lookup",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-005.md",
+        "references/source-003.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/CHANGELOG.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/FAQ.md"
+      ],
+      "evidence_paths": [
+        "references/source-005.md",
+        "references/source-003.md",
+        "references/source-003.md",
+        "references/source-005.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 454,
+      "spent_chars": 1819,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 864,
+        "output_tokens": 121
+      },
+      "latency_ms": 2221,
+      "answer": "No. As stated in the FAQ, ripgrep is maintained by volunteers, and a release schedule \"adds undue stress\" to them, so releases are made on a best-effort basis and \"no dates **will ever be given**.\" The only exception is for high-impact regressions, where there may be a strong push for a quick patch release, but even then \"no promises are made\" [references/source-005.md]."
+    },
+    {
+      "question_id": "q18",
+      "bundle": "ripgrep",
+      "class": "synthesis",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/ai-policy.md",
+        "concepts/readme.md",
+        "concepts/faq.md",
+        "concepts/guide.md"
+      ],
+      "cited_resources": [
+        "references/source-002.md",
+        "references/source-005.md",
+        "references/source-006.md",
+        "references/source-007.md"
+      ],
+      "evidence_paths": [
+        "concepts/ai-policy.md",
+        "concepts/readme.md",
+        "concepts/faq.md",
+        "concepts/guide.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 14,
+      "spent_tokens": 5339,
+      "spent_chars": 21357,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 791,
+        "output_tokens": 150
+      },
+      "latency_ms": 2431,
+      "answer": "The evidence does not specify explicit rules for communicating with ripgrep's maintainers when using LLMs. The AI Policy passage only states that using LLMs as coding tools is welcome, that a high bar is held for all contributions, and that both maintainers and contributors remain responsible for any published code [concepts/ai-policy.md]. No specific communication rules or requirements (e.g., disclosure obligations, formatting expectations) are provided in the given passages."
+    },
+    {
+      "question_id": "q18",
+      "bundle": "ripgrep",
+      "class": "synthesis",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "references/source-005.md",
+        "references/source-006.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/FAQ.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/GUIDE.md"
+      ],
+      "evidence_paths": [
+        "references/source-005.md",
+        "references/source-005.md",
+        "references/source-005.md",
+        "references/source-006.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 401,
+      "spent_chars": 1605,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 759,
+        "output_tokens": 100
+      },
+      "latency_ms": 3520,
+      "answer": "The provided evidence does not contain any rules about contributors using LLMs when communicating with ripgrep's maintainers—none of the passages (on licensing/FAQ topics, release schedules, or the user guide) address LLM usage or contributor communication policies. I cannot answer this question based on the given evidence."
+    },
+    {
+      "question_id": "q19",
+      "bundle": "ripgrep",
+      "class": "synthesis",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/faq.md",
+        "concepts/readme.md",
+        "concepts/readme-7.md",
+        "concepts/changelog.md"
+      ],
+      "cited_resources": [
+        "references/source-003.md",
+        "references/source-005.md",
+        "references/source-007.md",
+        "references/source-014.md"
+      ],
+      "evidence_paths": [
+        "concepts/faq.md",
+        "concepts/readme.md",
+        "concepts/readme-7.md",
+        "concepts/changelog.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 14,
+      "spent_tokens": 5498,
+      "spent_chars": 21994,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 829,
+        "output_tokens": 199
+      },
+      "latency_ms": 4777,
+      "answer": "Ripgrep can search compressed files by using the `-z`/`--search-zip` flag, which invokes its built-in decompression support; for formats not covered by that built-in support, ripgrep offers a mechanism via its FAQ entry \"How do I search compressed files?\", though the passages provided only confirm the existence of this FAQ topic without detailing the specific fallback mechanism [concepts/faq.md]. The evidence does not include the actual FAQ answer text describing how unsupported formats are handled (e.g., any external decompressor hook), so I cannot state that mechanism with certainty from the given passages."
+    },
+    {
+      "question_id": "q19",
+      "bundle": "ripgrep",
+      "class": "synthesis",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-005.md",
+        "references/source-007.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/FAQ.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/README.md"
+      ],
+      "evidence_paths": [
+        "references/source-005.md",
+        "references/source-007.md",
+        "references/source-007.md",
+        "references/source-007.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 518,
+      "spent_chars": 2072,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 996,
+        "output_tokens": 255
+      },
+      "latency_ms": 3047,
+      "answer": "To search inside compressed files, use ripgrep's `-z/--search-zip` flag, which automatically searches files compressed in gzip, bzip2, xz, lzma, lz4, Brotli, or Zstd formats; this requires the corresponding decompression binaries (`gzip`, `bzip2`, `xz`, `lz4`, `brotli`, `zstd`) to be installed, since ripgrep decompresses by shelling out to these external processes [references/source-005.md][references/source-007.md]. For formats or decompression needs beyond what `-z` supports, ripgrep offers arbitrary input preprocessing filters, which can be used for things like PDF text extraction, less-common decompression, decrypting, or automatic encoding detection [references/source-007.md]."
+    },
+    {
+      "question_id": "q20",
+      "bundle": "ripgrep",
+      "class": "multi-hop",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/release-checklist.md",
+        "concepts/readme.md",
+        "concepts/readme-9.md",
+        "concepts/faq.md"
+      ],
+      "cited_resources": [
+        "references/source-005.md",
+        "references/source-007.md",
+        "references/source-008.md",
+        "references/source-016.md"
+      ],
+      "evidence_paths": [
+        "concepts/release-checklist.md",
+        "concepts/readme.md",
+        "concepts/readme-9.md",
+        "concepts/faq.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 14,
+      "spent_tokens": 5229,
+      "spent_chars": 20916,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 736,
+        "output_tokens": 88
+      },
+      "latency_ms": 1838,
+      "answer": "The provided evidence does not contain the actual content of the release checklist—only a link to it [concepts/release-checklist.md]. None of the other passages (README, FAQ) specify which crate must be released first or its functionality, so I cannot answer this question based on the given evidence."
+    },
+    {
+      "question_id": "q20",
+      "bundle": "ripgrep",
+      "class": "multi-hop",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-008.md",
+        "references/source-003.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/CHANGELOG.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/RELEASE-CHECKLIST.md"
+      ],
+      "evidence_paths": [
+        "references/source-008.md",
+        "references/source-008.md",
+        "references/source-008.md",
+        "references/source-003.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 304,
+      "spent_chars": 1219,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 670,
+        "output_tokens": 378
+      },
+      "latency_ms": 4446,
+      "answer": "According to the checklist, crates must be checked/released in the order listed, with **crates/globset** appearing first [references/source-008.md]. However, the provided evidence does not describe what functionality the globset crate provides — the only crate functionality mentioned in the evidence is for a crate that \"encapsulates all of ripgrep's gitignore matching logic\" [references/source-003.md], which is not clearly identified as globset. So I cannot confirm globset's specific functionality from the given passages."
+    },
+    {
+      "question_id": "q21",
+      "bundle": "ripgrep",
+      "class": "multi-hop",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/faq.md",
+        "concepts/readme.md",
+        "concepts/guide.md",
+        "concepts/changelog.md"
+      ],
+      "cited_resources": [
+        "references/source-003.md",
+        "references/source-005.md",
+        "references/source-006.md",
+        "references/source-007.md"
+      ],
+      "evidence_paths": [
+        "concepts/faq.md",
+        "concepts/readme.md",
+        "concepts/guide.md",
+        "concepts/changelog.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 9,
+      "spent_tokens": 3932,
+      "spent_chars": 15728,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 784,
+        "output_tokens": 99
+      },
+      "latency_ms": 3584,
+      "answer": "The evidence provided does not contain this information — none of the passages mention a crate for embedding ripgrep's search functionality in a Rust program or describe such a crate. To answer accurately, I would need documentation about ripgrep's internal crates (such as a `grep` crate description), which is not present in the given passages."
+    },
+    {
+      "question_id": "q21",
+      "bundle": "ripgrep",
+      "class": "multi-hop",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "references/source-013.md",
+        "references/source-003.md",
+        "references/source-007.md",
+        "references/source-008.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/CHANGELOG.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/README.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/RELEASE-CHECKLIST.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/crates/core/README.md"
+      ],
+      "evidence_paths": [
+        "references/source-013.md",
+        "references/source-003.md",
+        "references/source-007.md",
+        "references/source-008.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 391,
+      "spent_chars": 1565,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 845,
+        "output_tokens": 176
+      },
+      "latency_ms": 3246,
+      "answer": "The evidence provided does not identify a specific \"entry point\" crate for embedding ripgrep's search functionality in another Rust program. It does mention that the core `ripgrep` crate glues together the `grep-matcher`, `grep-regex`, `grep-searcher`, and `grep-printer` crates to execute searches [references/source-013.md], but none of the passages describe a dedicated library crate (such as a \"grep\" crate) intended as the embeddable entry point, nor how such a crate describes itself. This information is missing from the given evidence."
+    },
+    {
+      "question_id": "q22",
+      "bundle": "ripgrep",
+      "class": "multi-hop",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/readme-9.md",
+        "concepts/readme.md",
+        "concepts/changelog.md",
+        "concepts/readme-11.md"
+      ],
+      "cited_resources": [
+        "references/source-003.md",
+        "references/source-007.md",
+        "references/source-016.md",
+        "references/source-018.md"
+      ],
+      "evidence_paths": [
+        "concepts/readme-9.md",
+        "concepts/readme.md",
+        "concepts/changelog.md",
+        "concepts/readme-11.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 14,
+      "spent_tokens": 5235,
+      "spent_chars": 20943,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 617,
+        "output_tokens": 92
+      },
+      "latency_ms": 1795,
+      "answer": "The `ignore` crate implements this functionality—it provides a fast recursive directory iterator that respects filters like globs, file types, and `.gitignore` files. It also exposes lower-level direct access to the gitignore and file type matchers themselves [concepts/readme-9.md]."
+    },
+    {
+      "question_id": "q22",
+      "bundle": "ripgrep",
+      "class": "multi-hop",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-003.md",
+        "references/source-016.md",
+        "references/source-006.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/CHANGELOG.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/GUIDE.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/crates/ignore/README.md"
+      ],
+      "evidence_paths": [
+        "references/source-003.md",
+        "references/source-016.md",
+        "references/source-006.md",
+        "references/source-016.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 395,
+      "spent_chars": 1581,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 844,
+        "output_tokens": 86
+      },
+      "latency_ms": 1948,
+      "answer": "The **ignore** crate implements this functionality: it provides a fast recursive directory iterator that respects filters such as globs, file types, and `.gitignore` files. It also exposes lower-level direct access to gitignore and file type matchers [references/source-016.md]."
+    },
+    {
+      "question_id": "q23",
+      "bundle": "ripgrep",
+      "class": "trust",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/changelog.md",
+        "concepts/faq.md",
+        "concepts/guide.md",
+        "concepts/readme-10.md"
+      ],
+      "cited_resources": [
+        "references/source-003.md",
+        "references/source-005.md",
+        "references/source-006.md",
+        "references/source-017.md"
+      ],
+      "evidence_paths": [
+        "concepts/changelog.md",
+        "concepts/faq.md",
+        "concepts/guide.md",
+        "concepts/readme-10.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 11,
+      "spent_tokens": 3463,
+      "spent_chars": 13854,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 613,
+        "output_tokens": 86
+      },
+      "latency_ms": 3097,
+      "answer": "The changelog for the unreleased version of ripgrep simply states \"TBD\" — indicating unreleased changes exist, but the release notes for them have not yet been written [concepts/changelog.md]. No specific list of changes or fixes is provided in the available evidence."
+    },
+    {
+      "question_id": "q23",
+      "bundle": "ripgrep",
+      "class": "trust",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": true,
+      "retrieval_hit": true,
+      "cited_paths": [
+        "references/source-003.md",
+        "references/source-005.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/CHANGELOG.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/FAQ.md"
+      ],
+      "evidence_paths": [
+        "references/source-003.md",
+        "references/source-005.md",
+        "references/source-003.md",
+        "references/source-003.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 418,
+      "spent_chars": 1673,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 799,
+        "output_tokens": 150
+      },
+      "latency_ms": 3495,
+      "answer": "The provided evidence does not document any changes for a next, unreleased version of ripgrep. The passages only cover released versions—11.0.0 [references/source-003.md] and 12.0.0 (2020-03-15) [references/source-003.md]—along with general information about ripgrep's release policy [references/source-005.md] and versioning approach [references/source-003.md]. There is no \"Unreleased\" section or similar content in the given evidence that would describe pending changes."
+    },
+    {
+      "question_id": "q24",
+      "bundle": "ripgrep",
+      "class": "trust",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/readme.md",
+        "concepts/readme-2.md",
+        "concepts/faq.md",
+        "concepts/guide.md"
+      ],
+      "cited_resources": [
+        "references/source-005.md",
+        "references/source-006.md",
+        "references/source-007.md",
+        "references/source-009.md"
+      ],
+      "evidence_paths": [
+        "concepts/readme.md",
+        "concepts/readme-2.md",
+        "concepts/faq.md",
+        "concepts/guide.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 13,
+      "spent_tokens": 5201,
+      "spent_chars": 20806,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 611,
+        "output_tokens": 154
+      },
+      "latency_ms": 2339,
+      "answer": "The provided evidence does not contain this information. Passage 2 references a benchmark run named `2016-09-22-archlinux-cheetah` used for comparison purposes, but there is no passage stating what the most recent published benchmark run reports or when it was performed [concepts/readme-2.md]. The other passages (README, FAQ, and User Guide) do not address benchmark results at all [concepts/readme.md] [concepts/faq.md] [concepts/guide.md]."
+    },
+    {
+      "question_id": "q24",
+      "bundle": "ripgrep",
+      "class": "trust",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": true,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "references/source-005.md",
+        "references/source-007.md",
+        "references/source-003.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/CHANGELOG.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/FAQ.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/README.md"
+      ],
+      "evidence_paths": [
+        "references/source-005.md",
+        "references/source-007.md",
+        "references/source-007.md",
+        "references/source-003.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 400,
+      "spent_chars": 1603,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 779,
+        "output_tokens": 122
+      },
+      "latency_ms": 3745,
+      "answer": "The evidence provided does not report this—none of the passages contain results or a date for a specific benchmark suite run. They only reference that detailed benchmark analysis exists on the author's blog [references/source-007.md] and discuss ripgrep's release/versioning policy and history [references/source-005.md][references/source-003.md], but no actual benchmark run data or timestamp is given."
+    },
+    {
+      "question_id": "q25",
+      "bundle": "ripgrep",
+      "class": "unanswerable",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": false,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/readme.md",
+        "concepts/faq.md",
+        "concepts/readme-14.md",
+        "concepts/changelog.md"
+      ],
+      "cited_resources": [
+        "references/source-003.md",
+        "references/source-005.md",
+        "references/source-007.md",
+        "references/source-021.md"
+      ],
+      "evidence_paths": [
+        "concepts/readme.md",
+        "concepts/faq.md",
+        "concepts/readme-14.md",
+        "concepts/changelog.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 11,
+      "spent_tokens": 4478,
+      "spent_chars": 17915,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 742,
+        "output_tokens": 83
+      },
+      "latency_ms": 1942,
+      "answer": "The provided evidence does not answer this question—none of the passages mention any specific code editor (e.g., VS Code) using ripgrep for its search feature. To answer, I would need a passage explicitly stating which editor integrates ripgrep as its search engine."
+    },
+    {
+      "question_id": "q25",
+      "bundle": "ripgrep",
+      "class": "unanswerable",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": false,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "references/source-007.md",
+        "references/source-005.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/FAQ.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/README.md"
+      ],
+      "evidence_paths": [
+        "references/source-007.md",
+        "references/source-007.md",
+        "references/source-007.md",
+        "references/source-005.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 513,
+      "spent_chars": 2055,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 942,
+        "output_tokens": 148
+      },
+      "latency_ms": 2290,
+      "answer": "The provided evidence does not name any specific code editor that uses ripgrep as its built-in text search engine—the passages only describe ripgrep's general features (recursive search, gitignore-based filtering, speed, Unicode support) and comparisons to grep [references/source-007.md][references/source-005.md]. To answer which editor ships ripgrep for its search feature, additional evidence specifically mentioning that editor's integration with ripgrep would be needed."
+    },
+    {
+      "question_id": "q26",
+      "bundle": "ripgrep",
+      "class": "unanswerable",
+      "condition": "pd",
+      "abstained": false,
+      "abstention_appropriate": false,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "concepts/readme.md",
+        "concepts/release-checklist.md",
+        "concepts/changelog.md",
+        "concepts/faq.md"
+      ],
+      "cited_resources": [
+        "references/source-003.md",
+        "references/source-005.md",
+        "references/source-007.md",
+        "references/source-008.md"
+      ],
+      "evidence_paths": [
+        "concepts/readme.md",
+        "concepts/release-checklist.md",
+        "concepts/changelog.md",
+        "concepts/faq.md"
+      ],
+      "warnings": 8,
+      "tool_calls": 13,
+      "spent_tokens": 5049,
+      "spent_chars": 20196,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 727,
+        "output_tokens": 131
+      },
+      "latency_ms": 2474,
+      "answer": "The provided evidence does not state the specific month and year of ripgrep's first public release — the README only describes its features [concepts/readme.md], and the Release Checklist, CHANGELOG, and FAQ entries do not include any release date information [concepts/release-checklist.md][concepts/changelog.md][concepts/faq.md]. I would need the actual changelog contents or release history to answer this accurately."
+    },
+    {
+      "question_id": "q26",
+      "bundle": "ripgrep",
+      "class": "unanswerable",
+      "condition": "rag",
+      "abstained": false,
+      "abstention_appropriate": false,
+      "gold_hit": false,
+      "retrieval_hit": false,
+      "cited_paths": [
+        "references/source-005.md",
+        "references/source-003.md",
+        "references/source-008.md",
+        "references/source-007.md"
+      ],
+      "cited_resources": [
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/CHANGELOG.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/FAQ.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/README.md",
+        "https://github.com/BurntSushi/ripgrep/blob/3fce3b5bb0236da2df6d99672afb8a719642eca7/RELEASE-CHECKLIST.md"
+      ],
+      "evidence_paths": [
+        "references/source-005.md",
+        "references/source-003.md",
+        "references/source-008.md",
+        "references/source-007.md"
+      ],
+      "warnings": 0,
+      "tool_calls": 1,
+      "spent_tokens": 508,
+      "spent_chars": 2033,
+      "budget_exhausted": false,
+      "model_usage": {
+        "input_tokens": 964,
+        "output_tokens": 134
+      },
+      "latency_ms": 2553,
+      "answer": "The provided evidence does not contain the release date for ripgrep's first public version. None of the passages [references/source-005.md], [references/source-003.md], [references/source-008.md], or [references/source-007.md] mention an initial release month or year—only general release policy, versioning changes, release checklist steps, and a project description are covered. To answer this, a changelog entry or announcement specifically noting the first release date would be needed."
+    }
+  ]
+}
