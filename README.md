@@ -147,7 +147,10 @@ client as a read-only stdio server. It offers exactly the seven deterministic ex
 tools — `overview`, `list`, `search`, `peek`, `read`, `links`, `history` — each with a
 JSON schema, bounded output, and path validation. The server adds no capability the local
 explorer does not already have: it cannot write, follow a link off disk, reach the
-network, or expose anything outside the bundle root. Bundle text stays data.
+network, or expose anything outside the bundle root. Bundle text stays data. A session
+binds to the bundle's current immutable revision at startup, so its answers stay
+attributable to one revision id even if a rebuild happens mid-session (bundles without a
+revision store — someone else's, or an unpacked archive — are served from the tree as-is).
 
 ```sh
 oknoll serve --mcp                       # serves the active project's bundle

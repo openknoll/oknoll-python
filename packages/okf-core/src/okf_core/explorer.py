@@ -27,7 +27,7 @@ from okf_core import bundle as bundle_mod
 from okf_core import indexing
 from okf_core import links as links_mod
 from okf_core.frontmatter import Frontmatter, FrontmatterError, parse_document
-from okf_core.revision import read_current_revision_id
+from okf_core.revision import read_current_revision_id, revision_dir
 
 TOOLS: tuple[str, ...] = ("overview", "list", "search", "peek", "read", "links", "history")
 
@@ -55,7 +55,14 @@ def estimate_tokens(chars: int) -> int:
 
 
 class Explorer:
-    """Deterministic navigation over one bundle tree."""
+    """Deterministic navigation over one bundle tree.
+
+    When the bundle has a revision store, the session pins to the current
+    immutable revision at construction and reads exclusively from it — the
+    answers a session gives are attributable to one revision id, whatever
+    rebuilds happen meanwhile. Bundles without a store (foreign or unpacked)
+    are navigated via the materialized tree.
+    """
 
     def __init__(self, bundle_root: Path, *, today: str | None = None) -> None:
         root = bundle_root.resolve()
@@ -63,6 +70,18 @@ class Explorer:
             raise ExplorerError(f"bundle directory not found: {bundle_root}")
         self.root = root
         self.today = today  # injectable so freshness stays deterministic in tests
+        # A session binds to the current immutable revision when the bundle has
+        # a revision store, so a mid-session rebuild cannot change bytes under
+        # it. Foreign bundles — someone else's, an extracted archive, no
+        # ``.oknoll/`` store — fall back to the materialized tree.
+        self.pinned_revision_id: str | None = None
+        self._read_root: Path = root
+        current = read_current_revision_id(root)
+        if current is not None:
+            pinned_tree = revision_dir(root, current)
+            if pinned_tree.is_dir():
+                self.pinned_revision_id = current
+                self._read_root = pinned_tree
         self._index_dir: Path | None = None
         self._graph: dict[str, dict[str, list[str]]] | None = None
         self._file_list: list[bundle_mod.BundleFile] | None = None
@@ -72,7 +91,11 @@ class Explorer:
 
     def _index(self) -> Path:
         if self._index_dir is None:
-            self._index_dir = indexing.ensure_index(self.root)
+            # Index the session's read root, but keep derived state under the
+            # bundle root — never inside an immutable revision directory. The
+            # index is keyed by content hash, so a pinned session finds the
+            # index the pipeline already built for its revision.
+            self._index_dir = indexing.ensure_index(self.root, tree=self._read_root)
         return self._index_dir
 
     def _link_graph(self) -> dict[str, dict[str, list[str]]]:
@@ -81,20 +104,21 @@ class Explorer:
         return self._graph
 
     def _files_snapshot(self) -> list[bundle_mod.BundleFile]:
-        """The bundle's file set, enumerated once and cached for the session.
+        """The session's file set, enumerated once from the read root.
 
         Every tool that needs to know "what files are in this bundle?" reads
         this one snapshot, so the seven tools stay mutually consistent even if
-        the on-disk tree changes mid-session (e.g. a rebuild): the file *set* is
-        bound at first use. ``iter_files`` already excludes ``.oknoll/`` and
-        other hidden state, and does not descend into symlinked directories, so
-        membership here is the authoritative answer to "is this a file of this
-        bundle?". (Body *content* is still read live in ``_parse``; true byte
-        pinning would require reading from the immutable revision dir, which the
-        explorer deliberately does not do — it navigates the materialized tree.)
+        the on-disk tree changes mid-session. In pinned mode the read root is
+        an immutable revision directory, so the file set *and* body bytes are
+        fixed for the whole session — a mid-session rebuild changes nothing a
+        tool returns. In fallback mode (no revision store) the file set is
+        still bound at first use, though body content reads live from the
+        tree. ``iter_files`` already excludes ``.oknoll/`` and other hidden
+        state, and does not descend into symlinked directories, so membership
+        here is the authoritative answer to "is this a file of this bundle?".
         """
         if self._file_list is None:
-            self._file_list = bundle_mod.iter_files(self.root)
+            self._file_list = bundle_mod.iter_files(self._read_root)
         return self._file_list
 
     def _bundle_files(self) -> dict[str, Path]:
@@ -125,7 +149,7 @@ class Explorer:
         abs_path = self._bundle_files().get(normalized)
         if abs_path is None:
             raise ExplorerError(f"no such bundle file: {normalized}")
-        if not abs_path.resolve().is_relative_to(self.root):
+        if not abs_path.resolve().is_relative_to(self._read_root):
             raise ExplorerError(f"path {path!r} escapes the bundle root")
         if not normalized.endswith(".md"):
             raise ExplorerError(f"not a markdown file: {normalized}")
@@ -183,9 +207,15 @@ class Explorer:
 
     # -- the seven tools ---------------------------------------------------
 
+    def _session_revision_id(self) -> str | None:
+        """The revision this session answers from: the pin, or the live pointer."""
+        if self.pinned_revision_id is not None:
+            return self.pinned_revision_id
+        return read_current_revision_id(self.root)
+
     def overview(self) -> dict[str, Any]:
         """Root index plus type/tag/status/trust/freshness summary."""
-        index_path = self.root / bundle_mod.INDEX_NAME
+        index_path = self._read_root / bundle_mod.INDEX_NAME
         title = self.root.name
         description = None
         if index_path.is_file():
@@ -225,7 +255,8 @@ class Explorer:
         return {
             "title": title,
             "description": description,
-            "revision_id": read_current_revision_id(self.root),
+            "revision_id": self._session_revision_id(),
+            "revision_pinned": self.pinned_revision_id is not None,
             "counts": {"concepts": concepts, "references": references},
             "types": dict(sorted(types.items())),
             "tags": dict(sorted(tags.items())),
@@ -371,7 +402,7 @@ class Explorer:
         """Revision log entries, newest first; read-only."""
         limit = max(1, min(limit, 100))
         entries: list[dict[str, str]] = []
-        log_path = self.root / bundle_mod.LOG_NAME
+        log_path = self._read_root / bundle_mod.LOG_NAME
         if log_path.is_file():
             for line in log_path.read_text(encoding="utf-8").splitlines():
                 match = _LOG_ENTRY_RE.match(line.strip())
@@ -381,6 +412,6 @@ class Explorer:
                     )
         entries.reverse()  # log appends chronologically; newest first for callers
         return {
-            "current_revision_id": read_current_revision_id(self.root),
+            "current_revision_id": self._session_revision_id(),
             "entries": entries[:limit],
         }
