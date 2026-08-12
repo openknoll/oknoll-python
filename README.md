@@ -34,7 +34,9 @@ to tell. Raw folders and vector indexes share the same gaps:
 OpenKnoll's answer is a compile step with a contract on the output:
 
 - **Build is a compiler** — acquire → normalize → plan → generate → link → lint → index →
-  publish. Defects surface at build time (five-level lint), not answer time.
+  publish. Defects surface at build time (five-level lint), not answer time, and
+  `oknoll lint` reports bundle-health metrics — source coverage, orphaned concepts,
+  broken links, staleness, uncited references — as JSON for CI to watch over time.
 - **Provenance is pinned** — every concept cites its sources; repositories are pinned to
   the exact commit SHA, and every source carries a content hash.
 - **Revisions are immutable** — content-derived revision ids, idempotent rebuilds, and

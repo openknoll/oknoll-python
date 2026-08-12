@@ -20,6 +20,7 @@ import typer
 from okf_core import (
     EmbeddingProvider,
     ExplorerError,
+    LintConfig,
     LintReport,
     ModelProvider,
     PipelineError,
@@ -229,7 +230,7 @@ def lint(
     json_output: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
 ) -> None:
     """Run all five validation levels on a bundle."""
-    report = lint_bundle(path)
+    report = lint_bundle(path, LintConfig(today=date.today().isoformat()))
 
     if json_output:
         typer.echo(json.dumps(report.to_dict(), indent=2, sort_keys=False))
@@ -240,8 +241,22 @@ def lint(
             f"{summary['errors']} error(s), {summary['warnings']} warning(s), "
             f"{summary['info']} info"
         )
+        _print_health(report.metrics)
 
     raise typer.Exit(code=0 if report.passed(strict=strict) else 1)
+
+
+def _print_health(metrics: dict[str, Any]) -> None:
+    if not metrics:
+        return
+    coverage = metrics["source_coverage"]
+    typer.echo(
+        f"health: {coverage['sourced']}/{coverage['total']} concepts sourced, "
+        f"{metrics['orphan_concepts']['count']} orphan(s), "
+        f"{metrics['broken_links']['count']} broken link(s), "
+        f"{metrics['freshness']['stale']} stale, "
+        f"{metrics['uncited_references']['count']} uncited reference(s)"
+    )
 
 
 @app.command()

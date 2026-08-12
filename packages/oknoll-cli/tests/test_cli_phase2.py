@@ -59,6 +59,14 @@ def test_full_local_flow(project: Path) -> None:
 
     lint = runner.invoke(app, ["lint", "bundle"])
     assert lint.exit_code == 0, _output(lint)
+    assert "health:" in _output(lint)
+
+    lint_json = runner.invoke(app, ["lint", "bundle", "--json"])
+    assert lint_json.exit_code == 0, _output(lint_json)
+    metrics = json.loads(lint_json.output)["metrics"]
+    assert metrics["concepts"] > 0
+    assert metrics["source_coverage"]["ratio"] == 1.0  # every built concept is sourced
+    assert metrics["uncited_references"]["count"] == 0
     assert "0 error(s), 0 warning(s), 0 info" in _output(lint)
 
     pack = runner.invoke(app, ["pack"])
