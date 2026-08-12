@@ -61,6 +61,11 @@ class AnthropicProvider:
 
         self.id = f"anthropic:{model}"
         self.served_model_id = self.id
+        # Per-call provider token accounting; okf-core's ask trace reads this
+        # via getattr after each complete() (eval prices its cost columns off
+        # it). None until a call succeeds, and reset per call so a failure
+        # never leaks the previous call's usage.
+        self.last_usage: dict[str, int] | None = None
         self._model = model
         self._max_tokens = max_tokens
         self._client: anthropic.Anthropic = anthropic_sdk.Anthropic(
@@ -72,6 +77,7 @@ class AnthropicProvider:
 
         system, user = render(prompt_id, payload)
         self.served_model_id = self.id
+        self.last_usage = None
         try:
             response = self._client.beta.messages.create(
                 model=self._model,
@@ -131,6 +137,16 @@ class AnthropicProvider:
         text = "".join(block.text for block in response.content if block.type == "text").strip()
         if not text:
             raise ProviderError("the Anthropic API returned an empty completion")
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            # Cache reads/writes are folded into input at base rate — the ask
+            # path is single-shot with no cache breakpoints, so they are ~0.
+            self.last_usage = {
+                "input_tokens": int(getattr(usage, "input_tokens", 0) or 0)
+                + int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+                + int(getattr(usage, "cache_creation_input_tokens", 0) or 0),
+                "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+            }
         return text
 
     def close(self) -> None:

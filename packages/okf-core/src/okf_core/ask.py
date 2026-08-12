@@ -13,8 +13,13 @@ evidence; on insufficient evidence the answer abstains and names what would
 resolve the gap. Bundle text is untrusted data — it is quoted, never obeyed.
 
 The trace is a separate record (tools, paths, retrieved characters, token
-estimates, latency, model, revision id, retrieval condition), derived state
-stored under ``.oknoll/traces/`` — never part of a portable bundle.
+estimates, latency, model, provider token usage, revision id, retrieval
+condition), derived state stored under ``.oknoll/traces/`` — never part of a
+portable bundle. ``budget.spent_tokens`` is the *retrieval* budget (an estimate
+over retrieved characters); ``model_usage`` is the provider's own accounting
+for the answer call (``input_tokens``/``output_tokens``), read from the
+provider's ``last_usage`` attribute when it has one — ``None`` for providers
+that do not report usage (the stub) and for abstentions, which make no call.
 """
 
 from __future__ import annotations
@@ -310,6 +315,7 @@ def answer_question(
 
     citations: list[Citation] = []
     warnings: list[str] = []
+    model_usage: dict[str, Any] | None = None
     if not evidence:
         abstained = True
         wanted = ", ".join(sorted(terms)) or "the question topic"
@@ -337,6 +343,7 @@ def answer_question(
                 ],
             },
         )
+        model_usage = getattr(provider, "last_usage", None)
         for entry in evidence:
             frontmatter = entry["frontmatter"]
             citations.append(_citation_for(entry["path"], frontmatter, entry["title"]))
@@ -362,6 +369,7 @@ def answer_question(
             "max_link_fanout": MAX_LINK_FANOUT,
             "max_concept_reads": MAX_CONCEPT_READS,
         },
+        "model_usage": model_usage,
         "tools": traced.events,
         "paths_read": sorted({str(doc["path"]) for doc in read_docs}),
         "hops": [
@@ -439,6 +447,7 @@ def _answer_rag(
         evidence.append({"path": path, "title": str(title), "excerpt": str(hit["text"])})
 
     citations: list[Citation] = []
+    model_usage: dict[str, Any] | None = None
     if not evidence:
         abstained = True
         wanted = ", ".join(sorted(set(question_terms(question)))) or "the question topic"
@@ -459,6 +468,7 @@ def _answer_rag(
                 ],
             },
         )
+        model_usage = getattr(provider, "last_usage", None)
         for path in dict.fromkeys(str(e["path"]) for e in evidence):
             frontmatter = frontmatters[path]
             title = str(frontmatter.get("title") or path)
@@ -485,6 +495,7 @@ def _answer_rag(
             "embedder": embedder.id,
             "index_chunks": len(index["chunks"]),
         },
+        "model_usage": model_usage,
         "tools": events,
         "paths_read": sorted({str(e["path"]) for e in evidence}),
         "hops": [],

@@ -44,3 +44,7 @@ crash.log
 # Local agent planning state (plans, handovers, task memory) — never shared
 .agents/
 env.local.sh
+
+# okb-pub-v1 reproduced bundle projects — local artifacts, rebuilt from pins
+packages/eval/benchmarks/okb-pub-v1/handbook/
+packages/eval/benchmarks/okb-pub-v1/ripgrep/

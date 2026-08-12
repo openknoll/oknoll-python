@@ -51,6 +51,10 @@ deterministic, the resulting bundles are byte-identical for everyone. The
 built `handbook/` and `ripgrep/` project directories are local artifacts and
 are not committed.
 
+Set `GITHUB_TOKEN` (any token with public-repo read access) before building:
+the handbook fetch makes ~250 GitHub API blob requests, which exceeds the
+unauthenticated rate limit of 60/hour.
+
 ## Running the benchmark
 
 ```sh

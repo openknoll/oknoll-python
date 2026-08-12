@@ -81,12 +81,16 @@ class OllamaProvider:
         timeout: float = _DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         self.id = f"ollama:{model}"
+        # Per-call token accounting (prompt_eval_count/eval_count), read by
+        # okf-core's ask trace via getattr; None when Ollama omits the counts.
+        self.last_usage: dict[str, int] | None = None
         self._model = model
         self._host = _normalize_host(host or os.environ.get("OLLAMA_HOST") or DEFAULT_OLLAMA_HOST)
         self._client = httpx.Client(transport=transport, timeout=timeout)
 
     def complete(self, prompt_id: str, payload: dict[str, Any]) -> str:
         system, user = render(prompt_id, payload)
+        self.last_usage = None
         body = {
             "model": self._model,
             "messages": [
@@ -133,6 +137,10 @@ class OllamaProvider:
         text = str(content).strip() if isinstance(content, str) else ""
         if not text:
             raise ProviderError(f"Ollama returned an empty completion for model {self._model!r}")
+        prompt_tokens = data.get("prompt_eval_count")
+        output_tokens = data.get("eval_count")
+        if isinstance(prompt_tokens, int) and isinstance(output_tokens, int):
+            self.last_usage = {"input_tokens": prompt_tokens, "output_tokens": output_tokens}
         return text
 
     def close(self) -> None:
