@@ -32,6 +32,9 @@ from okf_core.frontmatter import (
 @dataclass(frozen=True, slots=True)
 class LintConfig:
     max_concept_chars: int = 50_000
+    # ISO date for freshness metrics; injectable so reports stay deterministic
+    # (None = freshness unknown, nothing counts as stale).
+    today: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +95,68 @@ def lint_bundle(root: Path, config: LintConfig | None = None) -> LintReport:
             parsed.append(parsed_file)
 
     _check_link_graph(parsed, rel_paths, root, report)
+    report.metrics = _health_metrics(parsed, rel_paths, report, config.today)
     return report
+
+
+def _health_metrics(
+    parsed: list[_ParsedFile], rel_paths: set[str], report: LintReport, today: str | None
+) -> dict[str, Any]:
+    """Deterministic bundle-health aggregates over the lint pass's own data.
+
+    Counts and ratios only — nothing here gates a build, and nothing here
+    needs a model: these are the health signals a team can watch in CI
+    (source coverage, orphans, broken links, staleness, uncited references).
+    """
+    concepts = [f for f in parsed if bundle_mod.is_concept(f.rel_path)]
+    references = sorted(p for p in rel_paths if bundle_mod.is_reference(p) and p.endswith(".md"))
+
+    sourced = 0
+    dated = 0
+    stale = 0
+    cited: set[str] = set()
+    for concept in concepts:
+        fm = concept.doc.frontmatter
+        if fm is None:
+            continue
+        if fm.sources:
+            sourced += 1
+        for entry in fm.sources:
+            resource = entry.get("resource")
+            if isinstance(resource, str):
+                cited.add(posixpath.normpath(resource.lstrip("/")))
+        stale_after = fm.stale_after
+        if stale_after:
+            dated += 1
+            if today and stale_after < today:
+                stale += 1
+
+    orphans = sum(1 for f in report.findings if f.code == "hygiene/orphan-concept")
+    broken = sum(1 for f in report.findings if f.code == "hygiene/broken-link")
+    internal_links = sum(len(f.internal_targets) for f in parsed)
+    uncited = [rel for rel in references if rel not in cited]
+
+    return {
+        "concepts": len(concepts),
+        "references": len(references),
+        "source_coverage": {
+            "sourced": sourced,
+            "total": len(concepts),
+            "ratio": _ratio(sourced, len(concepts)),
+        },
+        "orphan_concepts": {
+            "count": orphans,
+            "total": len(concepts),
+            "ratio": _ratio(orphans, len(concepts)),
+        },
+        "broken_links": {"count": broken, "internal_links": internal_links},
+        "freshness": {"dated": dated, "stale": stale},
+        "uncited_references": {"count": len(uncited), "paths": uncited},
+    }
+
+
+def _ratio(count: int, total: int) -> float | None:
+    return round(count / total, 4) if total else None
 
 
 def _check_manifest(root: Path, rel_paths: set[str], report: LintReport) -> None:
