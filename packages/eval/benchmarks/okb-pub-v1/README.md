@@ -1,6 +1,7 @@
 # okb-pub-v1 — public PD-vs-RAG benchmark
 
-A descriptive comparison of primary-document (PD) answering vs a RAG baseline
+A descriptive comparison of progressive-disclosure (PD) answering vs a
+vector-RAG baseline
 over two public corpora. **Frozen on publication**: the questions and gold
 evidence in `spec.toml` never change; a revision means a new spec under a new
 name (the same rule that governs the private a2k-v1 regression set).
