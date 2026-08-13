@@ -131,18 +131,21 @@ def _visible_prose(text: str) -> str:
     return _FOOTNOTE_MARKER_RE.sub("", _LINK_TARGET_RE.sub(r"\1", text))
 
 
-def _candidate_paragraphs(body: str) -> list[str]:
-    """Prose paragraphs eligible as excerpts.
+def _candidate_paragraphs(body: str) -> list[tuple[str, str]]:
+    """(paragraph, section) pairs eligible as excerpts, in document order.
 
-    Structural scaffolding never answers a question, so it never competes:
-    bare headings, footnote definitions, and everything under a ``Sources``
-    heading (the machine-written source list) are skipped. For a title-shaped
-    question ("What is the security policy?") that scaffolding repeats the
-    question terms densely enough to beat the summary paragraph — the demo
-    regression this filter pins.
+    ``section`` is the lowercased text of the nearest preceding heading (""
+    before any heading) — fillers use it to put a concept's named section
+    digests ahead of leftover summary prose. Structural scaffolding never
+    answers a question, so it never competes: bare headings, footnote
+    definitions, and everything under a ``Sources`` heading (the
+    machine-written source list) are skipped. For a title-shaped question
+    ("What is the security policy?") that scaffolding repeats the question
+    terms densely enough to beat the summary paragraph — the demo regression
+    this filter pins.
     """
-    candidates: list[str] = []
-    in_sources = False
+    candidates: list[tuple[str, str]] = []
+    section = ""
     for raw in body.split("\n\n"):
         para = raw.strip()
         if not para:
@@ -150,14 +153,14 @@ def _candidate_paragraphs(body: str) -> list[str]:
         lines = [line for line in para.splitlines() if line.strip()]
         headings = [m.group(2) for line in lines if (m := _HEADING_RE.match(line))]
         if headings:
-            in_sources = headings[-1].strip().lower() == "sources"
+            section = headings[-1].strip().lower()
         if len(headings) == len(lines):
             continue  # bare heading(s): navigation, not prose
-        if in_sources:
+        if section == "sources":
             continue
         if all(_FOOTNOTE_DEF_RE.match(line) for line in lines):
             continue
-        candidates.append(para)
+        candidates.append((para, section))
     return candidates
 
 
@@ -171,23 +174,29 @@ def _ranked_excerpts(body: str, terms: set[str], description: str = "") -> list[
     section that answers it from a passing mention, and it is just as
     deterministic. Both counts run over the visible prose
     (:func:`_visible_prose`), and only over candidate paragraphs
-    (:func:`_candidate_paragraphs`). When no body paragraph matches, the
+    (:func:`_candidate_paragraphs`); a match whose visible tokens are all
+    question terms (a pure echo) is discarded — it carries no information the
+    question didn't already contain. When no body paragraph matches, the
     frontmatter description — the generated one-paragraph summary — is the sole
     fallback candidate, so a document whose only body hits are scaffolding can
     still contribute its summary rather than a path stub.
     """
     scored: list[tuple[int, int, int, str]] = []
-    for position, para in enumerate(_candidate_paragraphs(body)):
+    for position, (para, _section) in enumerate(_candidate_paragraphs(body)):
         prose = _visible_prose(para)
-        distinct = len(terms & tokenize(prose))
-        if distinct == 0:
+        tokens = tokenize(prose)
+        distinct = len(terms & tokens)
+        if distinct == 0 or tokens <= terms:
+            # A pure echo — no token beyond the question's own words (a bare
+            # "- Security policy" link line) — carries no information and
+            # must not outrank or crowd out substance.
             continue
         scored.append((-distinct, -term_occurrences(prose, terms), position, para))
     scored.sort()
     if not scored and description:
-        distinct = len(terms & tokenize(_visible_prose(description)))
-        if distinct:
-            scored = [(-distinct, 0, 0, description)]
+        tokens = tokenize(_visible_prose(description))
+        if terms & tokens and not tokens <= terms:
+            scored = [(-len(terms & tokens), 0, 0, description)]
     return [
         (_visible_prose(para).strip()[:EXCERPT_CHARS], -neg_distinct)
         for neg_distinct, _, _, para in scored
@@ -198,6 +207,39 @@ def _best_excerpt(body: str, terms: set[str], description: str = "") -> tuple[st
     """The head of :func:`_ranked_excerpts`: one document's single best excerpt."""
     ranked = _ranked_excerpts(body, terms, description)
     return ranked[0] if ranked else ("", 0)
+
+
+def _title_shaped(terms: set[str], title: str) -> bool:
+    """Whether the question asks what this document *is*.
+
+    Every salient question term appears in the document's title ("What is the
+    security policy?" against "Security policy"), so the whole document is
+    definitionally on-topic — the license for structural fill.
+    """
+    return bool(terms) and terms <= tokenize(title)
+
+
+def _filler_excerpts(body: str, terms: set[str]) -> list[str]:
+    """Non-matching prose of a title-shaped document, best-structured first.
+
+    The sections a concept groups under its title are exactly the ones that
+    don't need to repeat it ("Credentials are stored hash-only" under
+    "Security policy") — lexical matching can never see them, so when the
+    question is title-shaped they fill spare evidence slots. Named section
+    digests (under a ``Sections`` heading) come first — for "what is X?" the
+    enumerated parts *are* the answer — then remaining prose, both in document
+    order. Pure echoes stay excluded everywhere.
+    """
+    section_digests: list[str] = []
+    rest: list[str] = []
+    for para, section in _candidate_paragraphs(body):
+        prose = _visible_prose(para)
+        tokens = tokenize(prose)
+        if terms & tokens or not tokens:
+            continue  # matching prose already competes in _ranked_excerpts
+        bucket = section_digests if section == "sections" else rest
+        bucket.append(prose.strip()[:EXCERPT_CHARS])
+    return section_digests + rest
 
 
 def _concept_warnings(path: str, frontmatter: dict[str, Any], today: str | None) -> list[str]:
@@ -213,6 +255,23 @@ def _concept_warnings(path: str, frontmatter: dict[str, Any], today: str | None)
     if not fm.verified:
         warnings.append(f"{path}: unverified — no verification record")
     return warnings
+
+
+def _evidence_entry(
+    doc: dict[str, Any],
+    title: str,
+    frontmatter: dict[str, Any],
+    excerpt: str,
+    score: int,
+) -> dict[str, Any]:
+    return {
+        "path": str(doc["path"]),
+        "title": title,
+        "excerpt": excerpt,
+        "score": score,
+        "frontmatter": frontmatter,
+        "via": doc["_via"],
+    }
 
 
 def _citation_for(path: str, frontmatter: dict[str, Any], title: str) -> Citation:
@@ -247,8 +306,10 @@ def answer_question(
     snapshots). Both share the answer contract, the evidence budget
     (≤ MAX_EVIDENCE excerpts of ≤ EXCERPT_CHARS), and the trace shape. PD
     allocates evidence slots diversity-first: each read document's best excerpt
-    claims a slot, then spare slots go to remaining paragraphs in rank order —
-    mirroring RAG's ability to take several chunks from one document.
+    claims a slot, spare slots go to remaining matching paragraphs in rank
+    order, and last to a title-shaped document's non-matching sections
+    (structural fill) — mirroring RAG's ability to take several chunks from one
+    document.
     """
     if condition not in ("pd", "rag"):
         raise ValueError(f"unknown retrieval condition {condition!r} — available: 'pd', 'rag'")
@@ -340,9 +401,11 @@ def answer_question(
     #    matching prose paragraphs (_ranked_excerpts); each document's best
     #    excerpt claims a slot first — navigation found that document for a
     #    reason, and a multi-hop answer must keep both ends — then spare slots
-    #    fill with the remaining paragraphs in rank order, so one concept's
-    #    sections can complete an answer without crowding out another document
-    #    (RAG's top-k can likewise take several chunks from one document).
+    #    fill with the remaining matching paragraphs in rank order, and last
+    #    with a title-shaped document's non-matching sections (structural
+    #    fill), so one concept's sections can complete an answer without
+    #    crowding out another document (RAG's top-k can likewise take several
+    #    chunks from one document).
     #    Reference snapshots of an already-cited concept are folded away.
     #    Anchor terms may *choose* a hop's excerpts (its payoff usually answers
     #    in different vocabulary), but ranking counts question-term hits alone,
@@ -353,6 +416,7 @@ def answer_question(
     #    displacing the very document search put first.
     primaries: list[dict[str, Any]] = []
     extras: list[dict[str, Any]] = []
+    fillers: list[dict[str, Any]] = []
     for doc in read_docs:
         doc_terms = doc["_terms"] if isinstance(doc["_terms"], set) else terms
         frontmatter = doc["frontmatter"] if isinstance(doc["frontmatter"], dict) else {}
@@ -362,26 +426,33 @@ def answer_question(
             doc_terms,
             description=description if isinstance(description, str) else "",
         )
-        title = frontmatter.get("title") or str(doc["path"])
+        title = str(frontmatter.get("title") or doc["path"])
         for position, (excerpt, _matched) in enumerate(ranked):
-            entry = {
-                "path": str(doc["path"]),
-                "title": str(title),
-                "excerpt": excerpt,
-                "score": len(terms & tokenize(excerpt)),
-                "frontmatter": frontmatter,
-                "via": doc["_via"],
-            }
+            entry = _evidence_entry(
+                doc, title, frontmatter, excerpt, len(terms & tokenize(excerpt))
+            )
             (primaries if position == 0 else extras).append(entry)
+        # Structural fill: for a title-shaped question, the document's whole
+        # body is on-topic, so its non-matching sections may take spare slots
+        # (a section like "Credentials are stored hash-only" never repeats
+        # its concept's title — lexical matching alone cannot reach it).
+        if ranked and _title_shaped(terms, title):
+            fillers.extend(
+                _evidence_entry(doc, title, frontmatter, excerpt, 0)
+                for excerpt in _filler_excerpts(str(doc["body"]), doc_terms)
+            )
     primaries.sort(key=lambda e: -int(e["score"]))  # stable: ties keep navigation order
     extras.sort(key=lambda e: -int(e["score"]))
+    # fillers stay in navigation + structural order — their score is 0 by construction
     cited_resources: set[str] = set()
-    for entry in primaries + extras:
+    for entry in primaries + extras + fillers:
         for source in Frontmatter(data=entry["frontmatter"]).sources:
             resource = source.get("resource")
             if isinstance(resource, str):
                 cited_resources.add(resource)
-    evidence = [e for e in primaries + extras if e["path"] not in cited_resources][:MAX_EVIDENCE]
+    evidence = [e for e in primaries + extras + fillers if e["path"] not in cited_resources][
+        :MAX_EVIDENCE
+    ]
 
     citations: list[Citation] = []
     warnings: list[str] = []
@@ -445,6 +516,7 @@ def answer_question(
             "max_concept_reads": MAX_CONCEPT_READS,
             "max_evidence": MAX_EVIDENCE,
             "excerpt_chars": EXCERPT_CHARS,
+            "title_shaped_fill": True,
         },
         "model_usage": model_usage,
         "tools": traced.events,

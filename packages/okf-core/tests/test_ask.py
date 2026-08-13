@@ -19,7 +19,9 @@ from okf_core.ask import (
     MAX_LINK_FANOUT,
     AskResult,
     _best_excerpt,
+    _filler_excerpts,
     _ranked_excerpts,
+    _title_shaped,
     answer_question,
     write_trace,
 )
@@ -272,6 +274,91 @@ def test_spare_evidence_slots_fill_from_the_same_document(multihop: Path) -> Non
     # Several excerpts of one document still cite (and warn about) it once.
     assert [c.path for c in result.citations].count("concepts/release-process.md") == 1
     assert len(result.warnings) == len(set(result.warnings))
+
+
+def test_pure_echo_matches_never_compete() -> None:
+    """A paragraph whose visible words are all question terms (a bare link
+    line, a title echo) carries no information the question didn't already
+    contain — it neither wins slots nor blocks the description fallback."""
+    terms = {"security", "policy"}
+    body = "# Related\n\n- [Security policy](/concepts/security-policy.md)"
+    assert _best_excerpt(body, terms) == ("", 0)
+
+    excerpt, matched = _best_excerpt(body, terms, description="The security policy in prose.")
+    assert (excerpt, matched) == ("The security policy in prose.", 2)
+
+    with_prose = body + "\n\nSee the security policy before requesting access."
+    excerpt, _ = _best_excerpt(with_prose, terms)
+    assert excerpt == "See the security policy before requesting access."
+
+
+def test_title_shaped_gate() -> None:
+    """Structural fill is licensed only when every salient question term
+    appears in the document's title."""
+    assert _title_shaped({"security", "policy"}, "Security policy")
+    assert not _title_shaped({"security", "policy"}, "Team handbook")
+    assert not _title_shaped({"security", "policy", "rotation"}, "Security policy")
+    assert not _title_shaped(set(), "Security policy")
+
+
+def test_filler_excerpts_prefer_named_sections() -> None:
+    """Fillers are the non-matching prose, named section digests first — for
+    'what is X?' the enumerated parts are the answer; leftover summary prose
+    trails; matching prose and echoes are someone else's job."""
+    terms = {"security", "policy"}
+    body = (
+        "# Summary\n\n"
+        "This security policy sets deny by default.\n\n"
+        "Access is refused unless permitted.\n\n"
+        "# Sections\n\n"
+        "**Credentials** — stored hash-only.\n\n"
+        "# Related\n\n"
+        "- [Security policy](/concepts/security-policy.md)\n\n"
+        "# Sources\n\n"
+        "- [Security policy](/references/source-004.md)"
+    )
+    assert _filler_excerpts(body, terms) == [
+        "**Credentials** — stored hash-only.",
+        "Access is refused unless permitted.",
+    ]
+
+
+def test_title_shaped_question_pulls_in_non_matching_sections(multihop: Path) -> None:
+    """The handbook-demo completeness gap: a section under the asked-about
+    concept ('Credentials are stored hash-only' under 'Security policy') never
+    repeats the title, so lexical matching alone cannot reach it. For a
+    title-shaped question, spare slots take those sections — named section
+    digests first."""
+    concept = multihop / "concepts" / "release-process.md"
+    concept.write_text(
+        concept.read_text(encoding="utf-8").replace(
+            "# Sources",
+            "# Sections\n\n**Rollback** — Failed deploys revert within the hour.\n\n# Sources",
+        ),
+        encoding="utf-8",
+    )
+    result = _ask(multihop, "What is the release process?")
+    # The Rollback digest shares no term with the question, yet reaches the
+    # answer — and ahead of the leftover summary prose (sections first).
+    assert "revert within the hour" in result.answer
+    assert result.answer.index("revert within the hour") < result.answer.index(
+        "does not repeat them"
+    )
+    assert result.trace["evidence_paths"].count("concepts/release-process.md") >= 2
+    # The hop keeps its slot, and citations still dedup per document.
+    assert "concepts/duty-roster.md" in result.trace["evidence_paths"]
+    assert [c.path for c in result.citations].count("concepts/release-process.md") == 1
+
+
+def test_structural_fill_is_gated_on_title_shaped_questions(multihop: Path) -> None:
+    """A question that merely *touches* a document gets no structural fill —
+    otherwise every read document would dump its whole body into spare slots."""
+    result = _ask(multihop, MULTIHOP_QUESTION)  # not title-shaped for any doc
+    assert result.trace["evidence_paths"] == [
+        "concepts/release-process.md",
+        "concepts/duty-roster.md",
+    ]
+    assert "does not repeat them" not in result.answer  # non-matching prose stayed out
 
 
 def test_trace_policy_records_the_evidence_budget_knobs(multihop: Path) -> None:
