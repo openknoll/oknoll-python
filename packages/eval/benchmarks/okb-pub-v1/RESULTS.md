@@ -24,6 +24,17 @@ from the README's pins — the real model only writes the final answers. That is
 a deliberate trade: reproducibility of the corpus over generation quality (see
 Limitations).
 
+**Ask-policy note (2026-08-13):** this run predates the ask evidence-policy
+changes landed on develop later the same day (`ff4c674` scaffolding exclusion,
+`898fdae` diversity-first evidence slots, `e92bb89` title-shaped structural
+fill). PD rows from runs on okf-core > 0.3.1 are not comparable to this table —
+retrieval selects different excerpts, which can shift every PD metric,
+gold-evidence hit included. The rag condition is unchanged, so comparing a
+newer PD column against this table's rag column would misattribute a policy
+change to the answer model. Traces are distinguishable: post-change runs carry
+`max_evidence`/`excerpt_chars`/`title_shaped_fill` in the trace `policy` block;
+this run's traces do not.
+
 ## Summary
 
 | metric | pd | rag |
