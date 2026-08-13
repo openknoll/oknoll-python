@@ -161,34 +161,43 @@ def _candidate_paragraphs(body: str) -> list[str]:
     return candidates
 
 
-def _best_excerpt(body: str, terms: set[str], description: str = "") -> tuple[str, int]:
-    """The prose paragraph with the most distinct question-term hits.
+def _ranked_excerpts(body: str, terms: set[str], description: str = "") -> list[tuple[str, int]]:
+    """One document's matching prose excerpts as (excerpt, distinct), best first.
 
-    Ties break on total term occurrences, then earliest. A single-salient-term
-    question ("What is A2K?") gives every mentioning paragraph the same distinct
-    count; occurrence density is what separates the section that answers it from
-    a passing mention, and it is just as deterministic. Both counts run over the
-    visible prose (:func:`_visible_prose`), and only over candidate paragraphs
+    Order is (distinct term hits, total occurrences) descending, document order
+    breaking ties — the head of the list is the document's single best excerpt.
+    A single-salient-term question ("What is A2K?") gives every mentioning
+    paragraph the same distinct count; occurrence density is what separates the
+    section that answers it from a passing mention, and it is just as
+    deterministic. Both counts run over the visible prose
+    (:func:`_visible_prose`), and only over candidate paragraphs
     (:func:`_candidate_paragraphs`). When no body paragraph matches, the
-    frontmatter description — the generated one-paragraph summary — is the
+    frontmatter description — the generated one-paragraph summary — is the sole
     fallback candidate, so a document whose only body hits are scaffolding can
     still contribute its summary rather than a path stub.
     """
-    best, best_key = "", (0, 0)
-    for para in _candidate_paragraphs(body):
+    scored: list[tuple[int, int, int, str]] = []
+    for position, para in enumerate(_candidate_paragraphs(body)):
         prose = _visible_prose(para)
         distinct = len(terms & tokenize(prose))
         if distinct == 0:
             continue
-        key = (distinct, term_occurrences(prose, terms))
-        if key > best_key:
-            best, best_key = para, key
-    if not best and description:
+        scored.append((-distinct, -term_occurrences(prose, terms), position, para))
+    scored.sort()
+    if not scored and description:
         distinct = len(terms & tokenize(_visible_prose(description)))
         if distinct:
-            best, best_key = description, (distinct, 0)
-    excerpt = _visible_prose(best).strip()
-    return excerpt[:EXCERPT_CHARS], best_key[0]
+            scored = [(-distinct, 0, 0, description)]
+    return [
+        (_visible_prose(para).strip()[:EXCERPT_CHARS], -neg_distinct)
+        for neg_distinct, _, _, para in scored
+    ]
+
+
+def _best_excerpt(body: str, terms: set[str], description: str = "") -> tuple[str, int]:
+    """The head of :func:`_ranked_excerpts`: one document's single best excerpt."""
+    ranked = _ranked_excerpts(body, terms, description)
+    return ranked[0] if ranked else ("", 0)
 
 
 def _concept_warnings(path: str, frontmatter: dict[str, Any], today: str | None) -> list[str]:
@@ -236,7 +245,10 @@ def answer_question(
     ``pd`` runs the deterministic navigation policy over concepts; ``rag`` runs
     the vector top-k baseline over the identical normalized corpus (reference
     snapshots). Both share the answer contract, the evidence budget
-    (≤ MAX_EVIDENCE excerpts of ≤ EXCERPT_CHARS), and the trace shape.
+    (≤ MAX_EVIDENCE excerpts of ≤ EXCERPT_CHARS), and the trace shape. PD
+    allocates evidence slots diversity-first: each read document's best excerpt
+    claims a slot, then spare slots go to remaining paragraphs in rank order —
+    mirroring RAG's ability to take several chunks from one document.
     """
     if condition not in ("pd", "rag"):
         raise ValueError(f"unknown retrieval condition {condition!r} — available: 'pd', 'rag'")
@@ -324,47 +336,52 @@ def answer_question(
             read_docs.append(linked)
             followed += 1
 
-    # 5. deterministic evidence selection: best matching paragraph per document,
-    #    with reference snapshots of an already-cited concept folded away.
-    #    Anchor terms may *choose* a hop's excerpt (its payoff usually answers
+    # 5. deterministic evidence selection: every read document ranks its
+    #    matching prose paragraphs (_ranked_excerpts); each document's best
+    #    excerpt claims a slot first — navigation found that document for a
+    #    reason, and a multi-hop answer must keep both ends — then spare slots
+    #    fill with the remaining paragraphs in rank order, so one concept's
+    #    sections can complete an answer without crowding out another document
+    #    (RAG's top-k can likewise take several chunks from one document).
+    #    Reference snapshots of an already-cited concept are folded away.
+    #    Anchor terms may *choose* a hop's excerpts (its payoff usually answers
     #    in different vocabulary), but ranking counts question-term hits alone,
     #    with the stable sort keeping navigation order (search rank, then hop
-    #    discovery) as the tie-break. Ranking on anchor-augmented scores lets a
-    #    single-salient-term question ("What is A2K?") rank every hop above the
-    #    seed that defines the term, displacing the very document search put
-    #    first.
-    evidence: list[dict[str, Any]] = []
+    #    discovery, then document order) as the tie-break. Ranking on
+    #    anchor-augmented scores would let a single-salient-term question
+    #    ("What is A2K?") rank every hop above the seed that defines the term,
+    #    displacing the very document search put first.
+    primaries: list[dict[str, Any]] = []
+    extras: list[dict[str, Any]] = []
     for doc in read_docs:
         doc_terms = doc["_terms"] if isinstance(doc["_terms"], set) else terms
         frontmatter = doc["frontmatter"] if isinstance(doc["frontmatter"], dict) else {}
         description = frontmatter.get("description")
-        excerpt, matched = _best_excerpt(
+        ranked = _ranked_excerpts(
             str(doc["body"]),
             doc_terms,
             description=description if isinstance(description, str) else "",
         )
-        if matched < 1:
-            continue
-        score = len(terms & tokenize(excerpt))
         title = frontmatter.get("title") or str(doc["path"])
-        evidence.append(
-            {
+        for position, (excerpt, _matched) in enumerate(ranked):
+            entry = {
                 "path": str(doc["path"]),
                 "title": str(title),
                 "excerpt": excerpt,
-                "score": score,
+                "score": len(terms & tokenize(excerpt)),
                 "frontmatter": frontmatter,
                 "via": doc["_via"],
             }
-        )
-    evidence.sort(key=lambda e: -int(e["score"]))  # stable: ties keep navigation order
+            (primaries if position == 0 else extras).append(entry)
+    primaries.sort(key=lambda e: -int(e["score"]))  # stable: ties keep navigation order
+    extras.sort(key=lambda e: -int(e["score"]))
     cited_resources: set[str] = set()
-    for entry in evidence:
+    for entry in primaries + extras:
         for source in Frontmatter(data=entry["frontmatter"]).sources:
             resource = source.get("resource")
             if isinstance(resource, str):
                 cited_resources.add(resource)
-    evidence = [e for e in evidence if e["path"] not in cited_resources][:MAX_EVIDENCE]
+    evidence = [e for e in primaries + extras if e["path"] not in cited_resources][:MAX_EVIDENCE]
 
     citations: list[Citation] = []
     warnings: list[str] = []
@@ -397,11 +414,16 @@ def answer_question(
             },
         )
         model_usage = getattr(provider, "last_usage", None)
+        cited_paths: set[str] = set()
         for entry in evidence:
+            path = str(entry["path"])
+            if path in cited_paths:
+                continue  # several excerpts of one document cite it once
+            cited_paths.add(path)
             frontmatter = entry["frontmatter"]
-            citations.append(_citation_for(entry["path"], frontmatter, entry["title"]))
-            if bundle_mod.is_concept(entry["path"]):
-                warnings.extend(_concept_warnings(entry["path"], frontmatter, today))
+            citations.append(_citation_for(path, frontmatter, entry["title"]))
+            if bundle_mod.is_concept(path):
+                warnings.extend(_concept_warnings(path, frontmatter, today))
 
     latency_ms = int((timer() - t0) * 1000)
     trace: dict[str, Any] = {
@@ -421,6 +443,8 @@ def answer_question(
         "policy": {
             "max_link_fanout": MAX_LINK_FANOUT,
             "max_concept_reads": MAX_CONCEPT_READS,
+            "max_evidence": MAX_EVIDENCE,
+            "excerpt_chars": EXCERPT_CHARS,
         },
         "model_usage": model_usage,
         "tools": traced.events,

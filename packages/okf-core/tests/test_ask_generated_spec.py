@@ -58,15 +58,22 @@ def test_answer_in_a_late_section_is_reachable_by_term_overlap(bundle: Path) -> 
     result = _ask(bundle, "What is Zephyr?")
 
     assert not result.abstained
-    # The evidence is the digest of "## 3. What is Zephyr?", quoted by the stub.
-    assert "governed telemetry mesh" in result.answer
+    # The lead evidence is the digest of "## 3. What is Zephyr?", quoted first
+    # by the stub; spare slots may add more excerpts of the same concept, which
+    # still cites (and warns) once.
+    lead_excerpt = result.answer.splitlines()[1]
+    assert "governed telemetry mesh" in lead_excerpt
     assert [c.path for c in result.citations] == [CONCEPT]
-    assert result.trace["evidence_paths"] == [CONCEPT]
+    assert set(result.trace["evidence_paths"]) == {CONCEPT}
+    assert result.trace["evidence_paths"][0] == CONCEPT
 
 
 def test_metadata_front_matter_is_no_longer_the_best_evidence(bundle: Path) -> None:
     result = _ask(bundle, "What is Zephyr?")
     # Version/contract/status boilerplate mentions the term too, but loses the
-    # occurrence tie-break to the section that actually answers.
-    assert "0.3-draft" not in result.answer
-    assert "Contract string" not in result.answer
+    # occurrence tie-break to the section that actually answers. It may trail
+    # as a spare-slot extra (RAG's top-k would retrieve that chunk too) — it
+    # must never lead the evidence.
+    lead_excerpt = result.answer.splitlines()[1]
+    assert "0.3-draft" not in lead_excerpt
+    assert "Contract string" not in lead_excerpt

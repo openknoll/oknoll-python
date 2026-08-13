@@ -14,9 +14,12 @@ import pytest
 from okf_core import StubModelProvider
 from okf_core.ask import (
     DEFAULT_TOKEN_BUDGET,
+    EXCERPT_CHARS,
+    MAX_EVIDENCE,
     MAX_LINK_FANOUT,
     AskResult,
     _best_excerpt,
+    _ranked_excerpts,
     answer_question,
     write_trace,
 )
@@ -227,6 +230,56 @@ def test_description_is_the_fallback_when_no_body_prose_matches() -> None:
 
     # No description, no prose match: the document contributes nothing.
     assert _best_excerpt(body, terms) == ("", 0)
+
+
+def test_ranked_excerpts_orders_all_matching_paragraphs() -> None:
+    """Every matching paragraph is a candidate, best first — the head is the
+    old single best excerpt, the tail is what spare evidence slots draw from."""
+    terms = {"zephyr", "mesh"}
+    body = (
+        "Zephyr appears here once.\n\n"
+        "Zephyr is a governed mesh; the Zephyr mesh replicates frames.\n\n"
+        "unrelated paragraph.\n\n"
+        "Zephyr and mesh, later and denser: mesh mesh mesh Zephyr Zephyr."
+    )
+    ranked = _ranked_excerpts(body, terms)
+    assert [matched for _, matched in ranked] == [2, 2, 1]
+    assert ranked[0][0].startswith("Zephyr and mesh, later and denser")
+    assert ranked[1][0].startswith("Zephyr is a governed mesh")
+    assert ranked[2][0] == "Zephyr appears here once."
+    assert _best_excerpt(body, terms) == ranked[0]
+
+
+def test_spare_evidence_slots_fill_from_the_same_document(multihop: Path) -> None:
+    """Diversity-first allocation: each document's best excerpt claims a slot,
+    then spare slots take a document's remaining paragraphs — one concept's
+    sections can complete an answer without crowding out the other end of a
+    multi-hop chain."""
+    concept = multihop / "concepts" / "release-process.md"
+    concept.write_text(
+        concept.read_text(encoding="utf-8").replace(
+            "# Sources",
+            "The release log records each sign-off.\n\n# Sources",
+        ),
+        encoding="utf-8",
+    )
+    result = _ask(multihop, MULTIHOP_QUESTION)
+    paths = result.trace["evidence_paths"]
+    assert paths.count("concepts/release-process.md") == 2  # spare slot used
+    assert "concepts/duty-roster.md" in paths  # the hop still holds its slot
+    assert "engineering director" in result.answer
+    assert "release log" in result.answer
+    # Several excerpts of one document still cite (and warn about) it once.
+    assert [c.path for c in result.citations].count("concepts/release-process.md") == 1
+    assert len(result.warnings) == len(set(result.warnings))
+
+
+def test_trace_policy_records_the_evidence_budget_knobs(multihop: Path) -> None:
+    """Traces from before and after the diversity-first allocation must be
+    distinguishable — the policy block names the evidence budget."""
+    policy = _ask(multihop, MULTIHOP_QUESTION).trace["policy"]
+    assert policy["max_evidence"] == MAX_EVIDENCE
+    assert policy["excerpt_chars"] == EXCERPT_CHARS
 
 
 def test_reference_snapshots_do_not_double_cite_their_concept(minimal: Path) -> None:
