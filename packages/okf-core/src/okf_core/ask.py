@@ -117,29 +117,77 @@ class _Traced:
 
 
 _FOOTNOTE_MARKER_RE = re.compile(r"\[\^[^\]]+\]")
+_FOOTNOTE_DEF_RE = re.compile(r"^\[\^[^\]]+\]:")
+_LINK_TARGET_RE = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 
 
-def _paragraphs(body: str) -> list[str]:
-    return [p.strip() for p in body.split("\n\n") if p.strip()]
+def _visible_prose(text: str) -> str:
+    """Text as a reader sees it: link targets and footnote markers removed.
+
+    Excerpts are scored and quoted over this — a path component such as
+    ``security.md`` inside a link target must not outvote actual sentences.
+    """
+    return _FOOTNOTE_MARKER_RE.sub("", _LINK_TARGET_RE.sub(r"\1", text))
 
 
-def _best_excerpt(body: str, terms: set[str]) -> tuple[str, int]:
-    """The paragraph with the most distinct question-term hits.
+def _candidate_paragraphs(body: str) -> list[str]:
+    """Prose paragraphs eligible as excerpts.
+
+    Structural scaffolding never answers a question, so it never competes:
+    bare headings, footnote definitions, and everything under a ``Sources``
+    heading (the machine-written source list) are skipped. For a title-shaped
+    question ("What is the security policy?") that scaffolding repeats the
+    question terms densely enough to beat the summary paragraph — the demo
+    regression this filter pins.
+    """
+    candidates: list[str] = []
+    in_sources = False
+    for raw in body.split("\n\n"):
+        para = raw.strip()
+        if not para:
+            continue
+        lines = [line for line in para.splitlines() if line.strip()]
+        headings = [m.group(2) for line in lines if (m := _HEADING_RE.match(line))]
+        if headings:
+            in_sources = headings[-1].strip().lower() == "sources"
+        if len(headings) == len(lines):
+            continue  # bare heading(s): navigation, not prose
+        if in_sources:
+            continue
+        if all(_FOOTNOTE_DEF_RE.match(line) for line in lines):
+            continue
+        candidates.append(para)
+    return candidates
+
+
+def _best_excerpt(body: str, terms: set[str], description: str = "") -> tuple[str, int]:
+    """The prose paragraph with the most distinct question-term hits.
 
     Ties break on total term occurrences, then earliest. A single-salient-term
     question ("What is A2K?") gives every mentioning paragraph the same distinct
     count; occurrence density is what separates the section that answers it from
-    a passing mention, and it is just as deterministic.
+    a passing mention, and it is just as deterministic. Both counts run over the
+    visible prose (:func:`_visible_prose`), and only over candidate paragraphs
+    (:func:`_candidate_paragraphs`). When no body paragraph matches, the
+    frontmatter description — the generated one-paragraph summary — is the
+    fallback candidate, so a document whose only body hits are scaffolding can
+    still contribute its summary rather than a path stub.
     """
     best, best_key = "", (0, 0)
-    for para in _paragraphs(body):
-        distinct = len(terms & tokenize(para))
+    for para in _candidate_paragraphs(body):
+        prose = _visible_prose(para)
+        distinct = len(terms & tokenize(prose))
         if distinct == 0:
             continue
-        key = (distinct, term_occurrences(para, terms))
+        key = (distinct, term_occurrences(prose, terms))
         if key > best_key:
             best, best_key = para, key
-    excerpt = _FOOTNOTE_MARKER_RE.sub("", best).strip()  # markers are for the file, not prose
+    if not best and description:
+        distinct = len(terms & tokenize(_visible_prose(description)))
+        if distinct:
+            best, best_key = description, (distinct, 0)
+    excerpt = _visible_prose(best).strip()
     return excerpt[:EXCERPT_CHARS], best_key[0]
 
 
@@ -288,11 +336,16 @@ def answer_question(
     evidence: list[dict[str, Any]] = []
     for doc in read_docs:
         doc_terms = doc["_terms"] if isinstance(doc["_terms"], set) else terms
-        excerpt, matched = _best_excerpt(str(doc["body"]), doc_terms)
+        frontmatter = doc["frontmatter"] if isinstance(doc["frontmatter"], dict) else {}
+        description = frontmatter.get("description")
+        excerpt, matched = _best_excerpt(
+            str(doc["body"]),
+            doc_terms,
+            description=description if isinstance(description, str) else "",
+        )
         if matched < 1:
             continue
         score = len(terms & tokenize(excerpt))
-        frontmatter = doc["frontmatter"] if isinstance(doc["frontmatter"], dict) else {}
         title = frontmatter.get("title") or str(doc["path"])
         evidence.append(
             {

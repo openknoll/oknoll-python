@@ -180,6 +180,55 @@ def test_best_excerpt_selection_rule_is_pinned() -> None:
     assert _best_excerpt("no match here.", terms) == ("", 0)
 
 
+def test_excerpt_never_comes_from_scaffolding() -> None:
+    """The handbook-demo regression: for a title-shaped question, footnote
+    definitions and the Sources list repeat the question terms densely enough
+    to beat the summary — the source *path* (``security.md``) even adds an
+    occurrence. Scaffolding must not compete at all."""
+    terms = {"security", "policy"}
+    body = (
+        "# Summary\n\n"
+        "This security policy establishes deny by default as the baseline.[^source-004]\n\n"
+        "# Sources\n\n"
+        "- [Security policy](/references/source-004.md)\n\n"
+        "[^source-004]: Security policy (/sources/handbook/security.md)"
+    )
+    excerpt, matched = _best_excerpt(body, terms)
+    assert matched == 2
+    assert excerpt == "This security policy establishes deny by default as the baseline."
+
+
+def test_link_targets_do_not_score_and_are_stripped_from_excerpts() -> None:
+    """A path inside a link target must not outvote prose, and the excerpt the
+    model sees is the visible text, not the markup."""
+    terms = {"security"}
+    body = (
+        "The security review gate applies to releases.\n\n"
+        "See [the checklist](/concepts/security.md#security) and "
+        "[the audit](/references/security-audit.md)."
+    )
+    excerpt, matched = _best_excerpt(body, terms)
+    assert matched == 1
+    assert excerpt == "The security review gate applies to releases."
+
+    linked, _ = _best_excerpt("Read [the security policy](/concepts/security.md).", terms)
+    assert linked == "Read the security policy."  # target stripped, anchor text kept
+
+
+def test_description_is_the_fallback_when_no_body_prose_matches() -> None:
+    """A document whose only body hits are scaffolding still contributes its
+    generated summary rather than being dropped or quoting a path stub."""
+    terms = {"security", "policy"}
+    body = "# Sources\n\n[^source-004]: Security policy (/sources/handbook/security.md)"
+    description = "This security policy establishes deny by default as the baseline."
+    excerpt, matched = _best_excerpt(body, terms, description=description)
+    assert matched == 2
+    assert excerpt == description
+
+    # No description, no prose match: the document contributes nothing.
+    assert _best_excerpt(body, terms) == ("", 0)
+
+
 def test_reference_snapshots_do_not_double_cite_their_concept(minimal: Path) -> None:
     result = _ask(minimal, "How is the modular monolith deployed behind the BFF?")
     paths = [c.path for c in result.citations]
