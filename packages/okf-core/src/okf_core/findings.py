@@ -48,6 +48,9 @@ class Finding:
 class LintReport:
     bundle_path: str
     findings: list[Finding] = field(default_factory=list)
+    # Deterministic bundle-health aggregates (counts and ratios computed from
+    # the same pass that produced the findings) — reported, never gating.
+    metrics: dict[str, Any] = field(default_factory=dict)
 
     def add(self, finding: Finding) -> None:
         self.findings.append(finding)
@@ -75,4 +78,5 @@ class LintReport:
                 "info": self.count(Severity.INFO),
             },
             "findings": [f.to_dict() for f in self.sorted_findings()],
+            "metrics": self.metrics,
         }

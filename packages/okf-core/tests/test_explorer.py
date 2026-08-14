@@ -13,7 +13,7 @@ import pytest
 from okf_core import explorer as explorer_mod
 from okf_core import indexing
 from okf_core.explorer import TOOLS, Explorer, ExplorerError
-from okf_core.revision import build_manifest, compute_revision_id
+from okf_core.revision import build_manifest, compute_revision_id, publish_revision
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GOLDEN = REPO_ROOT / "fixtures" / "bundles" / "golden"
@@ -332,3 +332,57 @@ def test_stale_after_drives_freshness(multihop: Path) -> None:
     )
     assert Explorer(multihop, today="2026-08-04").overview()["freshness"] == {"stale": 1}
     assert Explorer(multihop, today="2025-06-01").overview()["freshness"] == {"stale": 0}
+
+
+def test_pinned_session_survives_a_mid_session_rebuild(minimal: Path, tmp_path: Path) -> None:
+    """With a revision store the session reads the immutable revision.
+
+    A rebuild that publishes a new revision and rematerializes the top level
+    changes nothing the running session returns — bytes, search results, or
+    revision id. A fresh session pins the new revision.
+    """
+    bundle = tmp_path / "published"
+    bundle.mkdir()
+    rev_a = compute_revision_id(minimal)
+    publish_revision(bundle, minimal, rev_a)
+
+    explorer = Explorer(bundle)
+    overview = explorer.overview()
+    assert overview["revision_id"] == rev_a
+    assert overview["revision_pinned"] is True
+    body_before = explorer.read("concepts/authentication.md")["body"]
+
+    staged_b = tmp_path / "staged-b"
+    shutil.copytree(minimal, staged_b)
+    concept = staged_b / "concepts" / "authentication.md"
+    concept.write_text(
+        concept.read_text(encoding="utf-8") + "\nA quixotic amendment.\n", encoding="utf-8"
+    )
+    rev_b = compute_revision_id(staged_b)
+    assert rev_b != rev_a
+    publish_revision(bundle, staged_b, rev_b)
+
+    # the running session is unmoved: same bytes, same revision, no new term
+    assert explorer.read("concepts/authentication.md")["body"] == body_before
+    assert explorer.overview()["revision_id"] == rev_a
+    assert explorer.search("quixotic")["results"] == []
+    assert explorer.history()["current_revision_id"] == rev_a
+
+    # a fresh session pins the new revision and sees the change
+    fresh = Explorer(bundle)
+    assert fresh.overview()["revision_id"] == rev_b
+    assert "quixotic amendment" in fresh.read("concepts/authentication.md")["body"]
+    assert [hit["path"] for hit in fresh.search("quixotic")["results"]] == [
+        "concepts/authentication.md"
+    ]
+
+    # indexing a pinned tree never writes derived state into the revision dir
+    assert not (bundle / ".oknoll" / "revisions" / rev_a / ".oknoll").exists()
+    assert not (bundle / ".oknoll" / "revisions" / rev_b / ".oknoll").exists()
+
+
+def test_bundle_without_a_revision_store_is_not_pinned(minimal: Path) -> None:
+    """Foreign bundles (no .oknoll/ store) fall back to the materialized tree."""
+    overview = Explorer(minimal).overview()
+    assert overview["revision_pinned"] is False
+    assert overview["revision_id"] is None

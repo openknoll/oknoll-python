@@ -35,6 +35,9 @@ _DEFAULT_MAX_TOKENS = 16000
 # `served_model_id` records which model actually answered, and the pipeline
 # stores it with each cached generation — the cache *key* stays the requested
 # model (the request's identity), the cached *value* carries the provenance.
+# Not every model supports the parameter (Sonnet-tier models 400 on it), so
+# the provider learns from the API's own rejection rather than keeping a
+# model list here — see `_fallbacks_supported`.
 _FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
@@ -61,7 +64,15 @@ class AnthropicProvider:
 
         self.id = f"anthropic:{model}"
         self.served_model_id = self.id
+        # Per-call provider token accounting; okf-core's ask trace reads this
+        # via getattr after each complete() (eval prices its cost columns off
+        # it). None until a call succeeds, and reset per call so a failure
+        # never leaks the previous call's usage.
+        self.last_usage: dict[str, int] | None = None
         self._model = model
+        # True until the API rejects the fallbacks parameter for this model;
+        # after that every call goes out without it (one retry, then sticky).
+        self._fallbacks_supported = True
         self._max_tokens = max_tokens
         self._client: anthropic.Anthropic = anthropic_sdk.Anthropic(
             api_key=key, http_client=http_client
@@ -72,15 +83,9 @@ class AnthropicProvider:
 
         system, user = render(prompt_id, payload)
         self.served_model_id = self.id
+        self.last_usage = None
         try:
-            response = self._client.beta.messages.create(
-                model=self._model,
-                max_tokens=self._max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-                betas=[_FALLBACK_BETA],
-                extra_body={"fallbacks": "default"},
-            )
+            response = self._create(anthropic_sdk, system=system, user=user)
         except anthropic_sdk.AuthenticationError as exc:
             raise ProviderError(
                 "the Anthropic API rejected the key (401) — check ANTHROPIC_API_KEY"
@@ -131,7 +136,42 @@ class AnthropicProvider:
         text = "".join(block.text for block in response.content if block.type == "text").strip()
         if not text:
             raise ProviderError("the Anthropic API returned an empty completion")
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            # Cache reads/writes are folded into input at base rate — the ask
+            # path is single-shot with no cache breakpoints, so they are ~0.
+            self.last_usage = {
+                "input_tokens": int(getattr(usage, "input_tokens", 0) or 0)
+                + int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+                + int(getattr(usage, "cache_creation_input_tokens", 0) or 0),
+                "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+            }
         return text
+
+    def _create(self, anthropic_sdk: Any, *, system: str, user: str) -> Any:
+        """One Messages call, opting into refusal fallback where supported.
+
+        Models that reject the ``fallbacks`` parameter (400 naming it) get one
+        retry without it, and the rejection sticks for the provider's lifetime
+        so every later call skips the doomed attempt.
+        """
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": self._max_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+        }
+        if not self._fallbacks_supported:
+            return self._client.beta.messages.create(**kwargs)
+        try:
+            return self._client.beta.messages.create(
+                **kwargs, betas=[_FALLBACK_BETA], extra_body={"fallbacks": "default"}
+            )
+        except anthropic_sdk.BadRequestError as exc:
+            if "fallbacks" not in str(exc.message):
+                raise
+            self._fallbacks_supported = False
+            return self._client.beta.messages.create(**kwargs)
 
     def close(self) -> None:
         self._client.close()

@@ -219,6 +219,85 @@ def test_fallback_served_model_is_recorded(capsys: pytest.CaptureFixture[str]) -
     assert provider2.served_model_id == provider2.id
 
 
+def test_fallbacks_rejection_downgrades_once_and_sticks() -> None:
+    """Models that 400 on the fallbacks parameter get one retry without it,
+    and later calls skip the doomed attempt entirely."""
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies.append(body)
+        if "fallbacks" in body:
+            return httpx.Response(
+                400,
+                json={
+                    "type": "error",
+                    "error": {
+                        "type": "invalid_request_error",
+                        "message": "'claude-sonnet-5' does not support the `fallbacks` parameter.",
+                    },
+                },
+            )
+        return httpx.Response(200, json=_message_body(["An answer."]))
+
+    provider = _provider_with(httpx.MockTransport(handler))
+    assert provider.complete("answer-question", ANSWER_PAYLOAD) == "An answer."
+    assert provider.complete("answer-question", ANSWER_PAYLOAD) == "An answer."
+    # Call 1: with fallbacks (rejected), retried without; call 2: straight without.
+    assert ["fallbacks" in body for body in bodies] == [True, False, False]
+
+
+def test_unrelated_bad_request_is_not_swallowed_by_the_fallback_downgrade() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            json={
+                "type": "error",
+                "error": {"type": "invalid_request_error", "message": "max_tokens is too large"},
+            },
+        )
+
+    provider = _provider_with(httpx.MockTransport(handler))
+    with pytest.raises(ProviderError, match="400"):
+        provider.complete("answer-question", ANSWER_PAYLOAD)
+
+
+def test_last_usage_records_token_accounting_and_resets_on_failure() -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200, json=_message_body(["An answer."]))
+        return httpx.Response(200, json=_message_body(["partial"], stop_reason="max_tokens"))
+
+    provider = _provider_with(httpx.MockTransport(handler))
+    before = provider.last_usage
+    assert before is None  # no call yet
+    provider.complete("answer-question", ANSWER_PAYLOAD)
+    after = provider.last_usage
+    assert after == {"input_tokens": 10, "output_tokens": 5}
+    with pytest.raises(ProviderError, match="truncated"):
+        provider.complete("answer-question", ANSWER_PAYLOAD)
+    assert provider.last_usage is None  # a failed call never leaks the previous usage
+
+
+def test_last_usage_folds_cache_tokens_into_input() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = _message_body(["An answer."])
+        body["usage"] = {
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 3,
+            "cache_creation_input_tokens": 2,
+        }
+        return httpx.Response(200, json=body)
+
+    provider = _provider_with(httpx.MockTransport(handler))
+    provider.complete("answer-question", ANSWER_PAYLOAD)
+    assert provider.last_usage == {"input_tokens": 15, "output_tokens": 5}
+
+
 def test_whole_fallback_chain_refusal_still_raises() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = _message_body([], stop_reason="refusal")

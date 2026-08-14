@@ -231,32 +231,37 @@ def index_dir_for(bundle_root: Path, revision_id: str) -> Path:
     return bundle_root / INDEX_DIR / revision_id
 
 
-def ensure_index(bundle_root: Path) -> Path:
+def ensure_index(bundle_root: Path, *, tree: Path | None = None) -> Path:
     """Return the index directory for a bundle tree, building it when missing.
 
-    Keyed by the content-derived revision id, so the pipeline-built index for
-    the current revision is found and reused; foreign bundles (no ``.oknoll/``)
-    get an index built on first use. A read-only bundle — someone else's, or an
-    extracted archive — is indexed into a temp directory instead of failing.
+    ``tree`` is the tree to index (default: the bundle root itself). Derived
+    state always lands under ``bundle_root`` — so a session pinned to an
+    immutable revision directory can index that tree without writing inside
+    it, and because the key is the content-derived revision id, a pinned
+    revision finds the very index the pipeline built for it. Foreign bundles
+    (no ``.oknoll/``) get an index built on first use. A read-only bundle —
+    someone else's, or an extracted archive — is indexed into a temp directory
+    instead of failing.
     """
-    revision_id = compute_revision_id(bundle_root)
+    tree = bundle_root if tree is None else tree
+    revision_id = compute_revision_id(tree)
     dest = index_dir_for(bundle_root, revision_id)
     if (dest / FTS_NAME).is_file() and (dest / GRAPH_NAME).is_file():
         return dest
     try:
-        return write_index(bundle_root, dest)
+        return write_index(tree, dest)
     except OSError:
         # Read-only bundle. The fallback is a fresh private directory, never a
         # path derived from the revision id: that id is content-derived, so
         # anyone holding the same bundle could predict it and pre-seed a
         # poisoned index on a shared /tmp — poisoned snippets go straight into
         # search output, and a poisoned graph steers the link fan-out.
-        cached = _FALLBACK_INDEXES.get((str(bundle_root.resolve()), revision_id))
+        cached = _FALLBACK_INDEXES.get((str(tree.resolve()), revision_id))
         if cached is not None and (cached / FTS_NAME).is_file():
             return cached
         fallback = Path(tempfile.mkdtemp(prefix="oknoll-index-")) / revision_id
-        write_index(bundle_root, fallback)
-        _FALLBACK_INDEXES[(str(bundle_root.resolve()), revision_id)] = fallback
+        write_index(tree, fallback)
+        _FALLBACK_INDEXES[(str(tree.resolve()), revision_id)] = fallback
         return fallback
 
 

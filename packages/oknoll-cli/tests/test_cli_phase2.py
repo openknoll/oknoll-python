@@ -3,6 +3,7 @@ init → add → build → pack → diff --check, all local, all deterministic (
 """
 
 import contextlib
+import json
 import shutil
 import tarfile
 from pathlib import Path
@@ -58,6 +59,14 @@ def test_full_local_flow(project: Path) -> None:
 
     lint = runner.invoke(app, ["lint", "bundle"])
     assert lint.exit_code == 0, _output(lint)
+    assert "health:" in _output(lint)
+
+    lint_json = runner.invoke(app, ["lint", "bundle", "--json"])
+    assert lint_json.exit_code == 0, _output(lint_json)
+    metrics = json.loads(lint_json.output)["metrics"]
+    assert metrics["concepts"] > 0
+    assert metrics["source_coverage"]["ratio"] == 1.0  # every built concept is sourced
+    assert metrics["uncited_references"]["count"] == 0
     assert "0 error(s), 0 warning(s), 0 info" in _output(lint)
 
     pack = runner.invoke(app, ["pack"])
@@ -83,6 +92,65 @@ def test_build_without_sources_fails(project: Path) -> None:
     result = runner.invoke(app, ["build"])
     assert result.exit_code == 1
     assert "no sources registered" in _output(result)
+
+
+def _current_revision(project: Path) -> str:
+    return (project / "bundle" / ".oknoll" / "current").read_text(encoding="utf-8").strip()
+
+
+def test_semantic_diff_between_two_revisions(project: Path) -> None:
+    assert runner.invoke(app, ["add", "sources/handbook"]).exit_code == 0
+    assert runner.invoke(app, ["build"]).exit_code == 0
+    rev_a = _current_revision(project)
+
+    # amend a source and rebuild — a second revision to compare against
+    doc = project / "sources" / "handbook" / "security.md"
+    doc.write_text(
+        doc.read_text(encoding="utf-8") + "\nAn amendment about rotation.\n", encoding="utf-8"
+    )
+    rebuild = runner.invoke(app, ["build"])
+    assert rebuild.exit_code == 0, _output(rebuild)
+    rev_b = _current_revision(project)
+    assert rev_b != rev_a
+
+    result = runner.invoke(app, ["diff", rev_a, rev_b])
+    assert result.exit_code == 0, _output(result)
+    out = _output(result)
+    assert f"{rev_a} → {rev_b}" in out
+    assert "concepts" in out and "references" in out and "files" in out
+
+    # one revision id compares against the current revision
+    implicit = runner.invoke(app, ["diff", rev_a])
+    assert implicit.exit_code == 0, _output(implicit)
+    assert f"{rev_a} → {rev_b}" in _output(implicit)
+
+    as_json = runner.invoke(app, ["diff", rev_a, "--json"])
+    assert as_json.exit_code == 0, _output(as_json)
+    payload = json.loads(as_json.output)
+    assert payload["rev_a"] == rev_a
+    assert payload["rev_b"] == rev_b
+    assert payload["files"]["changed"]  # the amended source moved concept + reference
+
+    same = runner.invoke(app, ["diff", rev_b, rev_b])
+    assert same.exit_code == 0, _output(same)
+    assert "no content differences" in _output(same)
+
+
+def test_diff_argument_validation(project: Path) -> None:
+    assert runner.invoke(app, ["add", "sources/handbook"]).exit_code == 0
+    assert runner.invoke(app, ["build"]).exit_code == 0
+
+    bare = runner.invoke(app, ["diff"])
+    assert bare.exit_code == 1
+    assert "give a revision id" in _output(bare)
+
+    mixed = runner.invoke(app, ["diff", "rev-000000000abc", "--check"])
+    assert mixed.exit_code == 1
+    assert "--check takes no revision arguments" in _output(mixed)
+
+    unknown = runner.invoke(app, ["diff", "rev-000000000abc"])
+    assert unknown.exit_code == 1
+    assert "available" in _output(unknown)
 
 
 def test_diff_without_revision_fails(project: Path) -> None:

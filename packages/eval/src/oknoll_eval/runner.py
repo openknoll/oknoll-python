@@ -28,7 +28,9 @@ from okf_core.provider import GENERATOR_VERSION, PROMPT_VERSIONS
 from oknoll_eval.benchmark import Benchmark
 
 CONDITIONS = ("pd", "rag")
-RESULTS_SCHEMA_VERSION = 1
+# 2: rows gained retrieval_hit (gold ∩ evidence_paths) and model_usage
+#    (provider-reported input/output tokens for the answer call, or None).
+RESULTS_SCHEMA_VERSION = 2
 
 
 def run_benchmark(
@@ -59,6 +61,7 @@ def run_benchmark(
             cited_paths = [c.path for c in result.citations]
             cited_resources = sorted({r for c in result.citations for r in c.resources})
             gold = set(question.gold_evidence)
+            evidence_paths = [str(p) for p in result.trace["evidence_paths"]]
             rows.append(
                 {
                     "question_id": question.id,
@@ -69,14 +72,24 @@ def run_benchmark(
                     "abstention_appropriate": result.abstained
                     == (question.klass == "unanswerable"),
                     "gold_hit": bool(gold & (set(cited_paths) | set(cited_resources))),
+                    # The gold file *itself* reached the evidence set. Citations
+                    # mirror the evidence set in both conditions, so this is a
+                    # directness measure, not independent recall: RAG retrieves
+                    # reference files (the form gold evidence is written in),
+                    # while PD retrieves concepts and reaches gold through their
+                    # provenance — which gold_hit above credits via resources.
+                    "retrieval_hit": bool(gold & set(evidence_paths)),
                     "cited_paths": cited_paths,
                     "cited_resources": cited_resources,
-                    "evidence_paths": list(result.trace["evidence_paths"]),
+                    "evidence_paths": evidence_paths,
                     "warnings": len(result.warnings),
                     "tool_calls": len(result.trace["tools"]),
                     "spent_tokens": result.trace["budget"]["spent_tokens"],
                     "spent_chars": result.trace["budget"]["spent_chars"],
                     "budget_exhausted": result.trace["budget"]["exhausted"],
+                    # Provider-reported tokens for the answer call (None for
+                    # the stub and for abstentions) — the cost columns' input.
+                    "model_usage": result.trace.get("model_usage"),
                     "latency_ms": result.trace["latency_ms"],
                     "answer": result.answer,
                 }

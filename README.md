@@ -1,23 +1,57 @@
 # OpenKnoll — Python core + CLI (`oknoll-python`)
 
-Local-first knowledge packaging: ingest documents, websites, and repositories; normalize them
-into a format-neutral **CanonicalDoc** model; serialize portable **OKF v0.2** Markdown bundles;
-and explore them through a deterministic navigation layer (CLI, web, MCP). The file is the
-contract — a valid bundle stays useful without an OpenKnoll account, cloud service, or
-proprietary reader.
+OpenKnoll **compiles** messy source material — documents, websites, repositories — into a
+trusted knowledge interface for AI agents: a portable, versioned bundle of plain Markdown
+that agents navigate deterministically and answer from with citations, trust warnings, and
+honest abstention. Local-first and fully useful offline; the file is the contract — a
+valid bundle stays useful without an OpenKnoll account, cloud service, or proprietary
+reader.
 
-## Layout
+```sh
+brew install openknoll/tap/oknoll        # or: uv tool install oknoll
+oknoll init handbook && cd handbook
+oknoll add ./docs                        # plus websites and GitHub repos
+oknoll build                             # compile sources → published revision rev-…
+oknoll ask "How are credentials stored?" # cited answer — or an honest "not in this bundle"
+oknoll serve --mcp                       # same bundle, as read-only tools for any agent
+```
 
-| Path | Contents |
-|---|---|
-| `packages/okf-core` | CanonicalDoc, OKF v0.2 parser/writer, five-level lint, pipeline, indexes, packer |
-| `packages/oknoll-cli` | `oknoll` Typer CLI (frozen command surface) |
-| `packages/connectors` | files/web/github/transcript connectors + plugin SDK |
-| `packages/eval` | PD-vs-RAG evaluation harness |
-| `fixtures/` | golden bundles and malformed cases |
+## Why not just point the agent at my files (or a vector DB)?
 
-This repo is fully standalone with no cloud dependency; the hosted OpenKnoll
-platform consumes these packages as pinned git-tag dependencies.
+Because the expensive failure isn't "the agent can't see the docs" — it's the agent
+confidently answering from stale, unattributed, or missing knowledge, with nobody able
+to tell. Raw folders and vector indexes share the same gaps:
+
+- **No provenance.** An answer synthesized from a folder or a top-k of chunks can't say
+  *which* source, *which* version, or whether the source was ever reviewed.
+- **No abstention.** Similarity search always retrieves *something*, so the model rarely
+  says "that isn't in the knowledge base" — it improvises.
+- **No quality gate.** Duplicated, contradictory, or abandoned documents are served to
+  the agent with the same confidence as the canonical ones.
+- **No reproducibility.** Ask again next week — different chunks, different answer, and
+  no way to diff what changed in between.
+
+OpenKnoll's answer is a compile step with a contract on the output:
+
+- **Build is a compiler** — acquire → normalize → plan → generate → link → lint → index →
+  publish. Defects surface at build time (five-level lint), not answer time, and
+  `oknoll lint` reports bundle-health metrics — source coverage, orphaned concepts,
+  broken links, staleness, uncited references — as JSON for CI to watch over time.
+- **Provenance is pinned** — every concept cites its sources; repositories are pinned to
+  the exact commit SHA, and every source carries a content hash.
+- **Revisions are immutable** — content-derived revision ids, idempotent rebuilds, and
+  `oknoll diff --check` proves a rebuild reproduces the published revision byte for byte.
+  `oknoll diff rev-a rev-b` reports what changed between two revisions in knowledge
+  terms: concepts added or retitled, sources re-pinned, link edges moved.
+- **Navigation is deterministic** — agents explore through seven bounded, read-only tools
+  (`overview`, `list`, `search`, `peek`, `read`, `links`, `history`), answer only from
+  what they retrieved, cite bundle paths, surface trust warnings (draft, unverified), and
+  abstain when the evidence isn't there.
+- **The artifact is portable** — plain Markdown plus a checksummed manifest. Version it
+  in Git, lint it in CI, `pack` it, hand it to any MCP client.
+
+The mental model: what a container image is to "works on my machine", an OpenKnoll bundle
+aims to be to "the agent read our docs".
 
 ## Install
 
@@ -50,7 +84,7 @@ oknoll() { uv run --no-sync --project "$REPO" oknoll "$@"; }
 
 ## Usage
 
-### Demo: documents + a GitHub repo → portable OKF bundle
+### Demo: documents + a GitHub repo → portable knowledge bundle
 
 ```sh
 # 1. Create a project (config, ignore file, bundle skeleton).
@@ -117,7 +151,10 @@ client as a read-only stdio server. It offers exactly the seven deterministic ex
 tools — `overview`, `list`, `search`, `peek`, `read`, `links`, `history` — each with a
 JSON schema, bounded output, and path validation. The server adds no capability the local
 explorer does not already have: it cannot write, follow a link off disk, reach the
-network, or expose anything outside the bundle root. Bundle text stays data.
+network, or expose anything outside the bundle root. Bundle text stays data. A session
+binds to the bundle's current immutable revision at startup, so its answers stay
+attributable to one revision id even if a rebuild happens mid-session (bundles without a
+revision store — someone else's, or an unpacked archive — are served from the tree as-is).
 
 ```sh
 oknoll serve --mcp                       # serves the active project's bundle
@@ -286,6 +323,25 @@ automatically re-run on Anthropic's recommended fallback model in the same
 call instead of failing the build (`oknoll build` prints a note when this
 happens). The cache stores which model actually served each generation, so
 provenance stays honest even when the fallback answers.
+
+## What's in this repo
+
+Sources are normalized into a format-neutral **CanonicalDoc** model, then serialized as
+**OKF v0.2** (Open Knowledge Format) bundles — plain Markdown trees with frontmatter and
+a deterministic manifest. OKF's posture is strict producer, permissive consumer: this
+tooling emits strictly valid bundles, but tolerates unknown types and keys in bundles
+produced by others.
+
+| Path | Contents |
+|---|---|
+| `packages/okf-core` | CanonicalDoc, OKF v0.2 parser/writer, five-level lint, pipeline, indexes, packer |
+| `packages/oknoll-cli` | `oknoll` Typer CLI (frozen command surface) |
+| `packages/connectors` | files/web/github/transcript connectors + plugin SDK |
+| `packages/eval` | PD-vs-RAG evaluation harness |
+| `fixtures/` | golden bundles and malformed cases |
+
+This repo is fully standalone with no cloud dependency; the hosted OpenKnoll
+platform consumes these packages as pinned git-tag dependencies.
 
 ## Development
 

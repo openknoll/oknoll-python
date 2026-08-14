@@ -102,6 +102,20 @@ def test_gold_evidence_and_abstention_scoring(spec: Path) -> None:
     assert rows[("q03", "rag")]["abstention_appropriate"] is rows[("q03", "rag")]["abstained"]
 
 
+def test_retrieval_directness_and_model_usage_scoring(spec: Path) -> None:
+    rows = {(r["question_id"], r["condition"]): r for r in _run(spec)["rows"]}
+
+    # The gold *file itself* reached the evidence set (directness, not recall —
+    # the golden bundles list gold as concepts too, so PD scores direct here).
+    assert rows[("q01", "pd")]["retrieval_hit"] is True
+    assert rows[("q02", "pd")]["retrieval_hit"] is True
+    # An abstention retrieved nothing, so it cannot have retrieved gold.
+    assert rows[("q03", "pd")]["retrieval_hit"] is False
+
+    # The stub reports no token usage — rows carry None, never fabricated numbers.
+    assert all(r["model_usage"] is None for r in rows.values())
+
+
 def test_results_are_deterministic_and_json_safe(spec: Path) -> None:
     first, second = _run(spec), _run(spec)
     assert first == second
@@ -114,8 +128,27 @@ def test_report_renders_the_descriptive_table(spec: Path) -> None:
     assert "Descriptive comparison only" in report
     assert "| metric | pd | rag |" in report
     assert "gold-evidence hit" in report
+    assert "gold file retrieved directly" in report
     assert "| q01 | multi-hop | pd |" in report
     assert "no statistical tests" in report
+    # The stub is unpriced: the cost row renders "-", never a fabricated $0.
+    assert "| est. cost (USD, list price) | - | - |" in report
+
+
+def test_report_prices_cost_from_model_usage(spec: Path) -> None:
+    results = _run(spec)
+    results["model"] = "anthropic:claude-sonnet-5"  # $3/$15 per MTok list price
+    for row in results["rows"]:
+        if not row["abstained"]:
+            row["model_usage"] = {"input_tokens": 1_000_000, "output_tokens": 100_000}
+    report = render_report(results)
+    # $4.50 per answered row; PD abstains on q03 ($0) while RAG answers it.
+    assert "| est. cost (USD, list price) | $9.0000 | $13.5000 |" in report
+
+    # An answered row with usage missing makes the condition unpriceable, not free.
+    results["rows"][0]["model_usage"] = None
+    report = render_report(results)
+    assert "| est. cost (USD, list price) | - | $13.5000 |" in report
 
 
 def test_loader_rejects_malformed_specs(tmp_path: Path) -> None:

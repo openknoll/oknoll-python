@@ -1,0 +1,286 @@
+# okb-pub-v1 — the public PD-vs-RAG benchmark spec.
+#
+# FROZEN ON PUBLICATION. Questions and gold evidence never change once this
+# spec is published; a revision means a new spec under a new name (the same
+# rule that governs a2k-v1).
+#
+# This spec ships pins, not a corpus: the two bundles are built from public
+# GitHub sources pinned to exact commit SHAs (see [corpora] below and the
+# adjacent README.md). Builds are deterministic, so anyone reproduces the
+# bundles byte-for-byte with `oknoll build` and re-runs the benchmark with
+# `oknoll eval`. Gold evidence paths (`references/source-NNN.md`) follow from
+# the connector's deterministic selection: the Nth selected file in
+# lexicographic path order at the pinned SHA.
+#
+# Authored 2026-08-12. Gold evidence was written before any run.
+
+[benchmark]
+name = "okb-pub-v1"
+
+# Machine-readable corpus pins. `load_benchmark` ignores this table; it is the
+# provenance record work item 1 asks for ("SHAs recorded in the spec TOML").
+[corpora.handbook]
+repo = "https://github.com/gsa-tts/handbook"      # legacy name: 18F/handbook
+commit = "c220f93896b39e9e4ab0f486a1d5bf346ac06e3e"
+license = "CC0-1.0 (US Government work, public domain)"
+selected_files = 250
+
+[corpora.ripgrep]
+repo = "https://github.com/BurntSushi/ripgrep"
+commit = "3fce3b5bb0236da2df6d99672afb8a719642eca7"
+license = "MIT OR Unlicense"
+selected_files = 25
+
+# Bundle directories are built locally from the pins (see README.md) and are
+# not committed. Paths resolve relative to this file.
+[bundles]
+handbook = "handbook/bundle"
+ripgrep = "ripgrep/bundle"
+
+# ---------------------------------------------------------------------------
+# TTS handbook bundle (gsa-tts/handbook @ c220f938)
+# ---------------------------------------------------------------------------
+
+[[questions]]
+id = "q01"
+bundle = "handbook"
+class = "lookup"
+question = "As of when is Trello no longer available at GSA, and what happens to existing Trello boards?"
+# source-207 = pages/tools/trello.md (decommissioned September 1, 2025)
+gold_evidence = ["references/source-207.md"]
+
+[[questions]]
+id = "q02"
+bundle = "handbook"
+class = "lookup"
+question = "Within how much time must a suspected IT security incident be reported to GSA IT?"
+# source-099 = pages/general-information-and-resources/tech-policies/security-incidents.md (1 hour)
+gold_evidence = ["references/source-099.md"]
+
+[[questions]]
+id = "q03"
+bundle = "handbook"
+class = "lookup"
+question = "When filling out the Transit Benefit Program Application, which Organization Code should TTS team members select?"
+# source-079 = .../employee-resources-policies/transit-benefit.md ("Q - Federal Acquisition Service")
+gold_evidence = ["references/source-079.md"]
+
+[[questions]]
+id = "q04"
+bundle = "handbook"
+class = "lookup"
+question = "Which password manager does the handbook recommend for TTS staff, and where can it be installed from?"
+# source-096 = .../tech-policies/password-requirements.md (KeePassXC, GSA Self-Service app)
+gold_evidence = ["references/source-096.md"]
+
+[[questions]]
+id = "q05"
+bundle = "handbook"
+class = "synthesis"
+question = "What are the three requirements for making passwords at TTS, and what does each one involve?"
+# source-096 = password-requirements.md (password manager / unique / strong — three sections)
+gold_evidence = ["references/source-096.md"]
+
+[[questions]]
+id = "q06"
+bundle = "handbook"
+class = "synthesis"
+question = "Describe the state of digital whiteboarding tools at TTS: what was used previously, what is replacing it, and why did the change happen?"
+# source-066 = .../collaboration-tools.md (Mural contract expired early 2025; FigJam transition; FedRAMP)
+gold_evidence = ["references/source-066.md"]
+
+[[questions]]
+id = "q07"
+bundle = "handbook"
+class = "multi-hop"
+question = "An employee is about to take twelve weeks of paid parental leave. Which Tock line item should that time be billed to?"
+# Lexical entry point is the paid-parental-leave page; the billing answer
+# (#1810, because the absence exceeds 3 weeks) lives in pages/tools/tock.md.
+# source-206 = pages/tools/tock.md
+gold_evidence = ["references/source-206.md"]
+
+[[questions]]
+id = "q08"
+bundle = "handbook"
+class = "multi-hop"
+question = "Mural is no longer available at TTS. What tool replaced it, and how does someone get access to that replacement's TTS organization?"
+# Hop from collaboration-tools (Mural -> FigJam) to the Figma page (access via
+# the #figma Slack channel, then division admin approval).
+# source-066 = collaboration-tools.md; source-178 = pages/tools/figma.md
+gold_evidence = ["references/source-066.md", "references/source-178.md"]
+
+[[questions]]
+id = "q09"
+bundle = "handbook"
+class = "multi-hop"
+question = "Where are the agency's mandatory training classes hosted, and how should time spent taking them be coded in Tock?"
+# Hop from the glossary's OLU entry to the OLU page (969 - GSA-mandated
+# Non-Billable Work). source-218 = pages/training-and-development/olu.md;
+# source-083 = pages/general-information-and-resources/glossary.md
+gold_evidence = ["references/source-218.md", "references/source-083.md"]
+
+[[questions]]
+id = "q10"
+bundle = "handbook"
+class = "trust"
+question = "What is the guidance on employee travel for conferences and training events?"
+# The only answer in the bundle is the July 13, 2021 COVID-era guidance
+# (conference/training travel not authorized). A trustworthy answer cites it
+# AND flags that it is dated pandemic guidance, not current policy.
+# source-224 = pages/travel-and-leave/july-13-travel-guidance.md
+gold_evidence = ["references/source-224.md"]
+
+[[questions]]
+id = "q11"
+bundle = "handbook"
+class = "trust"
+question = "Did TTS decide to add a Senior Cybersecurity Advisor role? What is the status and provenance of that decision?"
+# The evidence is RFC 003 (approved 2021-08-05) — a proposal document, not an
+# org chart. A trustworthy answer attributes the decision to the RFC process
+# and its date rather than asserting the role's current existence.
+# source-155 = pages/request-for-comments/003-tts-cybersecurity-advisor.md
+gold_evidence = ["references/source-155.md"]
+
+[[questions]]
+id = "q12"
+bundle = "handbook"
+class = "unanswerable"
+question = "When was the 18F unit shut down, and what reason was given?"
+# The public internet knows (2025); this snapshot's handbook still describes
+# 18F as operating and never mentions a shutdown. Parametric knowledge that
+# volunteers an answer is ungrounded — the correct behavior is abstention.
+gold_evidence = []
+
+[[questions]]
+id = "q13"
+bundle = "handbook"
+class = "unanswerable"
+question = "Who is the current Administrator of the General Services Administration?"
+# The handbook references the GSA Administrator role but never names the
+# current holder. Correct behavior is abstention.
+gold_evidence = []
+
+# ---------------------------------------------------------------------------
+# ripgrep bundle (BurntSushi/ripgrep @ 3fce3b5b)
+# ---------------------------------------------------------------------------
+
+[[questions]]
+id = "q14"
+bundle = "ripgrep"
+class = "lookup"
+question = "Which environment variable tells ripgrep where to find its configuration file?"
+# RIPGREP_CONFIG_PATH — documented in both GUIDE.md (source-006) and FAQ.md
+# (source-005); either citation is a hit.
+gold_evidence = ["references/source-006.md", "references/source-005.md"]
+
+[[questions]]
+id = "q15"
+bundle = "ripgrep"
+class = "lookup"
+question = "Which new target was added to ripgrep's release binaries in version 15.2.0?"
+# aarch64-unknown-linux-musl — CHANGELOG.md 15.2.0 (2026-07-15).
+# source-003 = CHANGELOG.md
+gold_evidence = ["references/source-003.md"]
+
+[[questions]]
+id = "q16"
+bundle = "ripgrep"
+class = "lookup"
+question = "What is the ripgrep project's policy on autonomous AI agents contributing to the project?"
+# Not allowed; violating PRs may be closed without notice. source-002 = AI_POLICY.md
+gold_evidence = ["references/source-002.md"]
+
+[[questions]]
+id = "q17"
+bundle = "ripgrep"
+class = "lookup"
+question = "Does the ripgrep project commit to dates for upcoming releases?"
+# No — "no dates will ever be given"; best-effort releases by volunteers.
+# source-005 = FAQ.md
+gold_evidence = ["references/source-005.md"]
+
+[[questions]]
+id = "q18"
+bundle = "ripgrep"
+class = "synthesis"
+question = "Summarize the rules a contributor using LLMs must follow when communicating with ripgrep's maintainers."
+# Multiple rules across AI_POLICY.md: human-written comments, own words in
+# issues/PRs, no autonomous agents, quote-block + disclosure for AI context,
+# translation guidance. source-002 = AI_POLICY.md
+gold_evidence = ["references/source-002.md"]
+
+[[questions]]
+id = "q19"
+bundle = "ripgrep"
+class = "synthesis"
+question = "How do you make ripgrep search inside compressed files, and what mechanism does it offer for formats its built-in decompression does not support?"
+# -z/--search-zip (FAQ.md) plus the --pre preprocessor feature (GUIDE.md).
+# source-005 = FAQ.md; source-006 = GUIDE.md
+gold_evidence = ["references/source-005.md", "references/source-006.md"]
+
+[[questions]]
+id = "q20"
+bundle = "ripgrep"
+class = "multi-hop"
+question = "According to the release checklist, which crate must be released first, and what functionality does that crate provide?"
+# Hop from RELEASE-CHECKLIST.md (globset is first in the release order) to
+# crates/globset/README.md (cross-platform glob and glob set matching).
+# source-008 = RELEASE-CHECKLIST.md; source-014 = crates/globset/README.md
+gold_evidence = ["references/source-008.md", "references/source-014.md"]
+
+[[questions]]
+id = "q21"
+bundle = "ripgrep"
+class = "multi-hop"
+question = "If you want to embed ripgrep's search functionality in your own Rust program, which crate is the intended entry point, and how does that crate describe itself?"
+# The answer lives in crates/grep/README.md: "ripgrep, as a library".
+# source-015 = crates/grep/README.md
+gold_evidence = ["references/source-015.md"]
+
+[[questions]]
+id = "q22"
+bundle = "ripgrep"
+class = "multi-hop"
+question = "Which crate implements the recursive directory traversal that respects .gitignore rules, and what lower-level access does it also expose?"
+# The question is phrased in terms of ripgrep's gitignore behavior; the answer
+# lives in crates/ignore/README.md (direct access to gitignore and file type
+# matchers). source-016 = crates/ignore/README.md
+gold_evidence = ["references/source-016.md"]
+
+[[questions]]
+id = "q23"
+bundle = "ripgrep"
+class = "trust"
+question = "What changes are documented for the next, unreleased version of ripgrep?"
+# The CHANGELOG's top section is "TBD — Release notes have not yet been
+# written." A trustworthy answer reports exactly that instead of inventing a
+# roadmap. source-003 = CHANGELOG.md
+gold_evidence = ["references/source-003.md"]
+
+[[questions]]
+id = "q24"
+bundle = "ripgrep"
+class = "trust"
+question = "What does the most recent published run of ripgrep's benchmark suite report, and when was that run performed?"
+# The newest benchsuite run in the tree is 2022-12-16 (Arch Linux, machine
+# "duff") — years older than the current release. A trustworthy answer dates
+# the evidence. source-011 = benchsuite/runs/2022-12-16-archlinux-duff/README.md
+gold_evidence = ["references/source-011.md"]
+
+[[questions]]
+id = "q25"
+bundle = "ripgrep"
+class = "unanswerable"
+question = "Which popular code editor ships ripgrep as the engine behind its built-in text search?"
+# The internet knows; nothing in the bundle says it. Abstention is correct —
+# a parametric answer here is by definition ungrounded.
+gold_evidence = []
+
+[[questions]]
+id = "q26"
+bundle = "ripgrep"
+class = "unanswerable"
+question = "In what month and year was ripgrep first publicly released?"
+# The CHANGELOG's earliest entries (0.2.x) carry no dates and 0.1 is absent
+# from the bundle. The internet knows; the bundle does not. Abstention.
+gold_evidence = []
