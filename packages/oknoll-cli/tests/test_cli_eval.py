@@ -50,7 +50,7 @@ def spec(tmp_path: Path) -> Path:
 
 
 def test_eval_writes_report_and_results(spec: Path, tmp_path: Path) -> None:
-    result = runner.invoke(app, ["eval", str(spec)])
+    result = runner.invoke(app, ["system", "eval", str(spec)])
     assert result.exit_code == 0, _output(result)
     assert "descriptive benchmark: cli-smoke" in result.output
     assert "| metric | pd | rag |" in result.output
@@ -66,6 +66,6 @@ def test_eval_writes_report_and_results(spec: Path, tmp_path: Path) -> None:
 def test_eval_rejects_a_bad_spec(tmp_path: Path) -> None:
     bad = tmp_path / "bad.toml"
     bad.write_text("[benchmark]\n", encoding="utf-8")
-    result = runner.invoke(app, ["eval", str(bad)])
+    result = runner.invoke(app, ["system", "eval", str(bad)])
     assert result.exit_code == 1
-    assert "oknoll eval" in _output(result)
+    assert "oknoll system eval" in _output(result)

@@ -121,13 +121,13 @@ def test_ollama_host_defaults_from_config_but_env_wins(
 
 
 # --- CLI-boundary precedence ----------------------------------------------
-# `oknoll build` resolves the provider before checking sources, so a fresh
+# `oknoll project build` resolves the provider before checking sources, so a fresh
 # project distinguishes the layers by which error it fails with.
 
 
 @pytest.fixture()
 def empty_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    assert runner.invoke(app, ["init", str(tmp_path), "--name", "empty"]).exit_code == 0
+    assert runner.invoke(app, ["project", "init", str(tmp_path), "--name", "empty"]).exit_code == 0
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
@@ -147,7 +147,7 @@ def test_global_default_applies_when_bundle_is_silent(
     (isolated_oknoll_home / "config.toml").write_text(
         '[build]\nmodel = "bogus-global"\n', encoding="utf-8"
     )
-    result = runner.invoke(app, ["build"])
+    result = runner.invoke(app, ["project", "build"])
     assert result.exit_code == 1
     assert "unknown model provider" in _output(result)
 
@@ -161,14 +161,14 @@ def test_bundle_setting_beats_global_default(
     config_path = empty_project / "oknoll.toml"
     text = config_path.read_text(encoding="utf-8").replace('# model = "stub"', 'model = "stub"')
     config_path.write_text(text, encoding="utf-8")
-    result = runner.invoke(app, ["build"])
+    result = runner.invoke(app, ["project", "build"])
     assert result.exit_code == 1
     # Past provider resolution: the bundle's "stub" won over the bogus global.
     assert "no sources registered" in _output(result)
 
 
 def test_unset_everywhere_falls_back_to_stub(empty_project: Path) -> None:
-    result = runner.invoke(app, ["build"])
+    result = runner.invoke(app, ["project", "build"])
     assert result.exit_code == 1
     assert "no sources registered" in _output(result)
 
@@ -177,7 +177,7 @@ def test_malformed_global_config_fails_cleanly_at_cli(
     empty_project: Path, isolated_oknoll_home: Path
 ) -> None:
     (isolated_oknoll_home / "config.toml").write_text("[build\n", encoding="utf-8")
-    result = runner.invoke(app, ["build"])
+    result = runner.invoke(app, ["project", "build"])
     assert result.exit_code == 1
     output = _output(result)
     assert "not valid TOML" in output

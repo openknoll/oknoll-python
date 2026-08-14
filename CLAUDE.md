@@ -22,13 +22,18 @@ behavior.
 - **The file is the contract.** Canonical bundles are Markdown trees + deterministic archives.
 - **Published revisions are immutable.** A rebuild writes a new revision directory and
   atomically advances the current pointer.
-- **The CLI surface is frozen**: `init`, `add`, `build`, `lint`, `ask`,
-  `chat`, `serve --mcp`, `pack`, `diff` (`--check` reproducibility gate; `rev-a
-  rev-b` semantic revision diff added 2026-08-12), `plugin`, `login`, `keys`, `eval`,
-  `viz` (added 2026-08-09: renders the link graph to one self-contained offline
-  HTML file), `config`, `doctor` (added 2026-08-09: machine-level config surface
-  over `~/.oknoll/` — `login`/`keys` stay reserved for the hosted control plane).
-  No aliases from superseded designs (`sync`, `validate`, `explore`, `export`).
+- **The CLI surface is namespaced and frozen** (v0.4.0 clean break, 2026-08-14):
+  `oknoll <resource> <command>` across twelve namespaces — `project source
+  bundle image registry auth daemon query mcp ui config system` — pinned by
+  per-namespace set-equality tests in `packages/oknoll-cli/tests/test_cli.py`
+  (the frozen surface, including which commands are still "not yet" stubs,
+  lives there). The flat v0.3 commands are hidden pointer stubs: they print
+  `moved: use 'oknoll X Y'` and exit 2, never perform work (`config *` is the
+  one surface kept in place; `keys` is dropped — its stub points to `auth
+  login`). The README's "Upgrading from v0.3" table is the mapping of record.
+  Adding or renaming a command or namespace is a deliberate act: update the
+  frozen sets, the README table, and this file together. No aliases from
+  superseded designs (`sync`, `validate`, `explore`, `export`).
 - **The deterministic explorer and the PD-vs-RAG evaluation are never cut.**
 - **Determinism everywhere:** paths, manifests, checksums, indexes, archives, link graphs.
   Model-generated fields (concept plans and descriptions) are cached by content hash +
@@ -52,8 +57,9 @@ behavior.
 - `packages/okf-core` — CanonicalDoc, OKF parser/writer, 5-level lint, pipeline stages
   (acquire→normalize→plan→generate→link→lint→index→publish), explorer (seven deterministic
   tools: `overview/list/search/peek/read/links/history`), ask policy, RAG seam, packer.
-- `packages/oknoll-cli` — Typer CLI over okf-core; includes the stdio MCP server
-  (`oknoll serve --mcp`), chat, plugin surface.
+- `packages/oknoll-cli` — Typer CLI over okf-core (`oknoll_cli/commands/` holds one
+  module per namespace); includes the stdio MCP server (`oknoll mcp stdio`), chat,
+  plugin surface.
 - `packages/connectors` — files/web/github connectors + `SafeFetcher` + the shared
   `ConnectorContractSuite` every connector must pass.
 - `packages/providers` — real model/embedding providers (Anthropic, Ollama); spec grammar

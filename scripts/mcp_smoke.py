@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke check for `oknoll serve --mcp`: spawn the server and drive it over the
+"""Smoke check for `oknoll mcp stdio`: spawn the server and drive it over the
 real stdio JSON-RPC transport (no model). Verifies the seven tools are present
 and one bounded call round-trips. Exits non-zero on any mismatch.
 
@@ -32,9 +32,8 @@ async def check(bundle: Path) -> None:
                 "--project",
                 str(REPO),
                 "oknoll",
-                "serve",
-                "--mcp",
-                "--bundle",
+                "mcp",
+                "stdio",
                 str(bundle),
             ],
         )

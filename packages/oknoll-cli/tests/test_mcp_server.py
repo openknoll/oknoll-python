@@ -1,4 +1,4 @@
-"""MCP contract + security tests for `oknoll serve --mcp`.
+"""MCP contract + security tests for `oknoll mcp stdio`.
 
 Everything runs over an in-memory client/server session — the same protocol
 layer a real stdio client exercises, minus the pipes. The contract pinned here:

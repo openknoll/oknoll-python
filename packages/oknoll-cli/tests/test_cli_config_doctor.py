@@ -99,7 +99,7 @@ def test_bundle_setting_beats_global_in_list(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_oknoll_home: Path
 ) -> None:
     assert runner.invoke(app, ["config", "set", "build.model", "ollama:llama3"]).exit_code == 0
-    assert runner.invoke(app, ["init", str(tmp_path), "--name", "proj"]).exit_code == 0
+    assert runner.invoke(app, ["project", "init", str(tmp_path), "--name", "proj"]).exit_code == 0
     config_path = tmp_path / "oknoll.toml"
     text = config_path.read_text(encoding="utf-8").replace('# model = "stub"', 'model = "stub"')
     config_path.write_text(text, encoding="utf-8")
@@ -117,7 +117,7 @@ def test_bundle_setting_beats_global_in_list(
 def test_doctor_passes_on_a_clean_machine(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OLLAMA_HOST", raising=False)
-    result = runner.invoke(app, ["doctor"])
+    result = runner.invoke(app, ["system", "doctor"])
     assert result.exit_code == 0, _output(result)
     output = _output(result)
     assert "all checks passed" in output
@@ -126,7 +126,7 @@ def test_doctor_passes_on_a_clean_machine(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_doctor_fails_on_malformed_global_config(isolated_oknoll_home: Path) -> None:
     (isolated_oknoll_home / "config.toml").write_text("[build\n", encoding="utf-8")
-    result = runner.invoke(app, ["doctor"])
+    result = runner.invoke(app, ["system", "doctor"])
     assert result.exit_code == 1
     output = _output(result)
     assert "not valid TOML" in output
@@ -138,7 +138,7 @@ def test_doctor_requires_anthropic_key_when_model_needs_it(
 ) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     assert runner.invoke(app, ["config", "set", "build.model", "anthropic"]).exit_code == 0
-    result = runner.invoke(app, ["doctor"])
+    result = runner.invoke(app, ["system", "doctor"])
     assert result.exit_code == 1
     assert "ANTHROPIC_API_KEY: not set" in _output(result)
 
@@ -151,7 +151,7 @@ def test_doctor_warns_on_world_readable_env(
     env_path = isolated_oknoll_home / ".env"
     env_path.write_text("# empty\n", encoding="utf-8")
     env_path.chmod(0o644)
-    result = runner.invoke(app, ["doctor"])
+    result = runner.invoke(app, ["system", "doctor"])
     assert result.exit_code == 0, _output(result)
     assert "chmod 600" in _output(result)
 
@@ -167,17 +167,17 @@ def test_doctor_fails_when_needed_ollama_is_unreachable(
         ).exit_code
         == 0
     )
-    result = runner.invoke(app, ["doctor"])
+    result = runner.invoke(app, ["system", "doctor"])
     assert result.exit_code == 1
     assert "cannot reach Ollama" in _output(result)
 
 
 def test_doctor_reports_bogus_bundle_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    assert runner.invoke(app, ["init", str(tmp_path), "--name", "proj"]).exit_code == 0
+    assert runner.invoke(app, ["project", "init", str(tmp_path), "--name", "proj"]).exit_code == 0
     config_path = tmp_path / "oknoll.toml"
     text = config_path.read_text(encoding="utf-8").replace('# model = "stub"', 'model = "bogus"')
     config_path.write_text(text, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["doctor"])
+    result = runner.invoke(app, ["system", "doctor"])
     assert result.exit_code == 1
     assert "unknown model provider" in _output(result)

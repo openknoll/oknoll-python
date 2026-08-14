@@ -9,11 +9,11 @@ reader.
 
 ```sh
 brew install openknoll/tap/oknoll        # or: uv tool install oknoll
-oknoll init handbook && cd handbook
-oknoll add ./docs                        # plus websites and GitHub repos
-oknoll build                             # compile sources → published revision rev-…
-oknoll ask "How are credentials stored?" # cited answer — or an honest "not in this bundle"
-oknoll serve --mcp                       # same bundle, as read-only tools for any agent
+oknoll project init handbook && cd handbook
+oknoll source add ./docs                 # plus websites and GitHub repos
+oknoll project build                     # compile sources → published revision rev-…
+oknoll query ask "How are credentials stored?"  # cited answer — or an honest "not in this bundle"
+oknoll mcp stdio                         # same bundle, as read-only tools for any agent
 ```
 
 ## Why not just point the agent at my files (or a vector DB)?
@@ -35,13 +35,13 @@ OpenKnoll's answer is a compile step with a contract on the output:
 
 - **Build is a compiler** — acquire → normalize → plan → generate → link → lint → index →
   publish. Defects surface at build time (five-level lint), not answer time, and
-  `oknoll lint` reports bundle-health metrics — source coverage, orphaned concepts,
+  `oknoll bundle lint` reports bundle-health metrics — source coverage, orphaned concepts,
   broken links, staleness, uncited references — as JSON for CI to watch over time.
 - **Provenance is pinned** — every concept cites its sources; repositories are pinned to
   the exact commit SHA, and every source carries a content hash.
 - **Revisions are immutable** — content-derived revision ids, idempotent rebuilds, and
-  `oknoll diff --check` proves a rebuild reproduces the published revision byte for byte.
-  `oknoll diff rev-a rev-b` reports what changed between two revisions in knowledge
+  `oknoll bundle diff --check` proves a rebuild reproduces the published revision byte for byte.
+  `oknoll bundle diff rev-a rev-b` reports what changed between two revisions in knowledge
   terms: concepts added or retitled, sources re-pinned, link edges moved.
 - **Navigation is deterministic** — agents explore through seven bounded, read-only tools
   (`overview`, `list`, `search`, `peek`, `read`, `links`, `history`), answer only from
@@ -82,6 +82,31 @@ REPO="$PWD"
 oknoll() { uv run --no-sync --project "$REPO" oknoll "$@"; }
 ```
 
+### Upgrading from v0.3
+
+v0.4.0 replaced the flat command surface with resource namespaces
+(`oknoll <resource> <command>`) in one clean break. Every old command now prints its
+replacement and exits 2 — nothing breaks silently, and no old spelling performs work:
+
+| v0.3 (flat) | v0.4 (namespaced) |
+|---|---|
+| `init` | `project init` |
+| `add` | `source add` |
+| `build` | `project build` |
+| `lint` | `bundle lint` |
+| `ask` | `query ask` |
+| `chat` | `query chat` |
+| `serve --mcp` | `mcp stdio [BUNDLE]` |
+| `pack` | `bundle pack` |
+| `diff` | `bundle diff` |
+| `plugin *` | `system plugins *` |
+| `login` | `auth login` |
+| `keys` | dropped — `auth login` is the whole surface |
+| `eval` | `system eval` |
+| `viz` | `system viz` |
+| `config *` | `config *` (unchanged) |
+| `doctor` | `system doctor` |
+
 ## Usage
 
 ### Demo: documents + a GitHub repo → portable knowledge bundle
@@ -89,20 +114,20 @@ oknoll() { uv run --no-sync --project "$REPO" oknoll "$@"; }
 ```sh
 # 1. Create a project (config, ignore file, bundle skeleton).
 mkdir -p ~/demo && cd ~/demo
-oknoll init handbook-demo --name "Team Handbook"
+oknoll project init handbook-demo --name "Team Handbook"
 cd handbook-demo
 
 # 2. Register sources. Local files/dirs (md, txt, PDF, docx) are probed on the spot;
 #    GitHub repos and websites are registered and fetched at build time.
 cp -R "$REPO/fixtures/sources/handbook" sources/handbook   # or use your own docs
-oknoll add sources/handbook
-oknoll add https://github.com/openknoll/oknoll-python      # commit-SHA provenance
-# oknoll add https://your-site.example/docs/               # sitemap-first same-site
+oknoll source add sources/handbook
+oknoll source add https://github.com/openknoll/oknoll-python   # commit-SHA provenance
+# oknoll source add https://your-site.example/docs/        # sitemap-first same-site
                                                            # crawl, robots honored,
                                                            # 100-page cap
 
 # 3. Build: acquire → normalize → plan → generate → link → lint → index → publish.
-oknoll build
+oknoll project build
 # 6 concept(s) from 6 source file(s); cache 0 hit(s), 12 miss(es)
 # published revision rev-a4d583b7229c
 
@@ -112,13 +137,13 @@ head bundle/references/source-006.md   # provenance: connector, uri (pinned to t
                                        # exact commit SHA for repos), source hash
 
 # 5. Verify. Rebuilds are idempotent (content-derived revision ids, build cache):
-oknoll build                   # cache 12 hit(s) → "no changes"
-oknoll lint bundle --strict    # five-level validation; 0 findings
-oknoll diff --check            # rebuild to temp, byte-compare — CI reproducibility gate
+oknoll project build           # cache 12 hit(s) → "no changes"
+oknoll bundle lint bundle --strict   # five-level validation; 0 findings
+oknoll bundle diff --check     # rebuild to temp, byte-compare — CI reproducibility gate
 
 # 6. Ask a question. The explorer navigates deterministically — overview → search →
 #    peek → read → follow links — and answers only from what it retrieved.
-oknoll ask "How are credentials stored?"
+oknoll query ask "How are credentials stored?"
 # Based on 1 passage(s) retrieved from the bundle:
 # - Security policy: Credentials are stored hash-only. Static keys are forbidden.
 #   [concepts/security-policy.md]
@@ -133,20 +158,20 @@ oknoll ask "How are credentials stored?"
 # trace: bundle/.oknoll/traces/ask-….json (5 tool call(s), 2876 chars, ~719 tokens)
 
 # With no supporting evidence it abstains and names the gap, rather than inventing:
-oknoll ask "What is the Zanzibar revenue forecast?"
+oknoll query ask "What is the Zanzibar revenue forecast?"
 # Insufficient evidence in this bundle to answer. No concept mentions: forecast,
 # revenue, zanzibar. Adding a source about … would resolve the gap.
 
-oknoll ask "…" --json          # answer + citations + warnings + full trace, machine-readable
+oknoll query ask "…" --json    # answer + citations + warnings + full trace, machine-readable
 
 # 7. Pack a deterministic, checksummed archive for sharing.
-oknoll pack                    # dist/Team Handbook-rev-….tar.gz  + .sha256
-oknoll pack --profile plain    # same tree with OKF-only frontmatter keys stripped
+oknoll bundle pack             # dist/Team Handbook-rev-….tar.gz  + .sha256
+oknoll bundle pack --profile plain   # same tree with OKF-only frontmatter keys stripped
 ```
 
 ### Serve a bundle to an agent over MCP
 
-`oknoll serve --mcp` exposes the bundle to any [MCP](https://modelcontextprotocol.io)
+`oknoll mcp stdio` exposes the bundle to any [MCP](https://modelcontextprotocol.io)
 client as a read-only stdio server. It offers exactly the seven deterministic explorer
 tools — `overview`, `list`, `search`, `peek`, `read`, `links`, `history` — each with a
 JSON schema, bounded output, and path validation. The server adds no capability the local
@@ -157,8 +182,8 @@ attributable to one revision id even if a rebuild happens mid-session (bundles w
 revision store — someone else's, or an unpacked archive — are served from the tree as-is).
 
 ```sh
-oknoll serve --mcp                       # serves the active project's bundle
-oknoll serve --mcp --bundle /path/to/any/bundle   # or any bundle, incl. someone else's
+oknoll mcp stdio                         # serves the active project's bundle
+oknoll mcp stdio /path/to/any/bundle     # or any bundle, incl. someone else's
 ```
 
 It speaks JSON-RPC on stdout and prints status to stderr, so it is driven by an MCP
@@ -171,7 +196,7 @@ Register the server once, pointing it at a built bundle (use absolute paths):
 ```sh
 claude mcp add oknoll -- \
   uv run --no-sync --project /abs/path/to/oknoll-python \
-  oknoll serve --mcp --bundle /abs/path/to/handbook-demo/bundle
+  oknoll mcp stdio /abs/path/to/handbook-demo/bundle
 ```
 
 Then in a `claude` session the seven `oknoll` tools are available, and the agent answers
@@ -185,7 +210,7 @@ takes the same shape via a JSON config:
     "oknoll": {
       "command": "uv",
       "args": ["run", "--no-sync", "--project", "/abs/path/to/oknoll-python",
-               "oknoll", "serve", "--mcp", "--bundle", "/abs/path/to/bundle"]
+               "oknoll", "mcp", "stdio", "/abs/path/to/bundle"]
     }
   }
 }
@@ -214,7 +239,7 @@ npx @modelcontextprotocol/inspector          # opens http://localhost:6274
 ```
 
 In the left panel set **Transport** to STDIO, **Command** to `uv`, and **Arguments** to
-`run --no-sync --project /abs/path/to/oknoll-python oknoll serve --mcp --bundle /abs/path/to/bundle`,
+`run --no-sync --project /abs/path/to/oknoll-python oknoll mcp stdio /abs/path/to/bundle`,
 then **Connect** → **Tools** → **List Tools** and run e.g. `search` with `query`.
 
 **Headless CLI** — copy [`mcp-inspector.example.json`](mcp-inspector.example.json), edit
@@ -239,17 +264,17 @@ the run deterministic regardless of what is stored there.
 
 ### Chat interactively
 
-`oknoll chat` is a single-bundle REPL over the same explorer, pinned to the current
+`oknoll query chat` is a single-bundle REPL over the same explorer, pinned to the current
 revision. Conversations persist under `bundle/.oknoll/conversations/` (derived state,
 never packed) and resume by id:
 
 ```sh
-oknoll chat                    # ask, ask again; `exit` to quit
-oknoll chat --mode rag         # vector baseline instead of progressive disclosure
-oknoll chat --resume chat-20260807-….   # continue where you left off
+oknoll query chat              # ask, ask again; `exit` to quit
+oknoll query chat --mode rag   # vector baseline instead of progressive disclosure
+oknoll query chat --resume chat-20260807-….   # continue where you left off
 ```
 
-`oknoll plugin list|inspect|validate` reports the installed connectors and checks them
+`oknoll system plugins list|inspect|validate` reports the installed connectors and checks them
 against the connector protocol.
 
 Revisions are immutable under `bundle/.oknoll/revisions/`; the bundle top level always
@@ -261,7 +286,7 @@ disk, reach the network, or drop a trust warning.
 
 ### Configuration
 
-By default `build`/`ask`/`chat` use a deterministic stub model (no network,
+By default `project build`/`query ask`/`query chat` use a deterministic stub model (no network,
 reproducible) — that default exists for CI and benchmarks. For bundle quality,
 configure a real model: it writes the concept descriptions, and it plans
 concept boundaries — splitting a multi-section document into several
@@ -270,7 +295,7 @@ one concept per document). Real providers are configured in two separate
 planes:
 
 - **Settings** (which model/embedder, the Ollama endpoint) resolve
-  *specific beats general*: CLI flag (`ask --model …`) → the bundle's
+  *specific beats general*: CLI flag (`query ask --model …`) → the bundle's
   `oknoll.toml` → `~/.oknoll/config.toml` → `stub`.
 - **Secrets** (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`) never live in TOML. They
   resolve through the environment: shell → `<project>/.env` →
@@ -284,25 +309,25 @@ oknoll config set rag.embedder ollama:nomic-embed-text
 oknoll config set providers.ollama.host http://127.0.0.1:11434
 oknoll config list      # effective settings + where each one comes from
 oknoll config get build.model
-oknoll doctor           # home dir, .env permissions, keys present, Ollama liveness
+oknoll system doctor    # home dir, .env permissions, keys present, Ollama liveness
 ```
 
 `~/.oknoll/` (relocatable via `OKNOLL_HOME`) holds two files, split like
 `~/.aws`: `config.toml` — machine defaults, no secrets, safe to share — and
 `.env` (`chmod 600`) for keys shared by every bundle on the machine (see
 `.env.example`). A bundle whose `oknoll.toml` sets `[build].model` explicitly
-keeps that choice regardless of the machine default; `oknoll eval` never
+keeps that choice regardless of the machine default; `oknoll system eval` never
 inherits settings from config files (its `--model`/`--embedder` default to the
 stub so benchmark comparisons stay reproducible).
 
-Set `GITHUB_TOKEN` before `oknoll build` to raise GitHub API rate limits for larger
-repositories. `login` and `keys` land with the hosted control plane in a later phase and
-currently exit with a clear "not implemented yet" message.
+Set `GITHUB_TOKEN` before `oknoll project build` to raise GitHub API rate limits for
+larger repositories. `auth login` lands with the hosted control plane in a later phase
+and currently exits with a clear "not implemented yet" message.
 
 ### Regenerating model output
 
 Model generations are cached by content hash + prompt version + model id, so
-rebuilds are reproducible: `oknoll diff --check` proves a rebuild matches the
+rebuilds are reproducible: `oknoll bundle diff --check` proves a rebuild matches the
 published revision byte for byte. The flip side is that cached output never
 improves on its own. Regeneration is therefore a deliberate, versioned event —
 bump the knob in `oknoll.toml` and rebuild:
@@ -312,7 +337,7 @@ bump the knob in `oknoll.toml` and rebuild:
 generation_version = "1"   # bump to re-make every cached model decision
 ```
 
-The next `oknoll build` re-asks the model for every generated field (concept
+The next `oknoll project build` re-asks the model for every generated field (concept
 plans and descriptions) and, if anything changed, publishes a new immutable
 revision with a reviewable diff — the old revision stays untouched. Commit the
 bump alongside the new revision so the regeneration is visible in history.
@@ -320,7 +345,7 @@ Switching models needs no bump: a new model id already invalidates the cache.
 
 With the Anthropic provider, a request declined by a safety classifier is
 automatically re-run on Anthropic's recommended fallback model in the same
-call instead of failing the build (`oknoll build` prints a note when this
+call instead of failing the build (`oknoll project build` prints a note when this
 happens). The cache stores which model actually served each generation, so
 provenance stays honest even when the fallback answers.
 
@@ -335,7 +360,7 @@ produced by others.
 | Path | Contents |
 |---|---|
 | `packages/okf-core` | CanonicalDoc, OKF v0.2 parser/writer, five-level lint, pipeline, indexes, packer |
-| `packages/oknoll-cli` | `oknoll` Typer CLI (frozen command surface) |
+| `packages/oknoll-cli` | `oknoll` Typer CLI (resource-namespaced command surface) |
 | `packages/connectors` | files/web/github/transcript connectors + plugin SDK |
 | `packages/eval` | PD-vs-RAG evaluation harness |
 | `fixtures/` | golden bundles and malformed cases |

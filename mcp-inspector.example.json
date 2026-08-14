@@ -9,9 +9,8 @@
         "--project",
         "/absolute/path/to/oknoll-python",
         "oknoll",
-        "serve",
-        "--mcp",
-        "--bundle",
+        "mcp",
+        "stdio",
         "/absolute/path/to/your/bundle"
       ]
     }
