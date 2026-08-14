@@ -84,6 +84,28 @@ def test_pack_rejects_unknown_profile(golden_dir: Path, tmp_path: Path) -> None:
         pack_bundle(golden_dir / "minimal", tmp_path / "x.tar.gz", profile="zip")
 
 
+# The OCI layer digest of an OkNoll image is over these compressed bytes
+# (spec/image-config-v1.md): the same tree must gzip to the same bytes on
+# every OS and zlib build. If this pin breaks on one platform, published
+# image digests would diverge — that is a release blocker, not a test to
+# update casually. (Legitimate fixture/packer changes update the pin.)
+GOLDEN_MINIMAL_PACK_SHA256 = "fe017d5bb62c8474f79063f2c355b2b22b0cbd3945182a3a7e0b08a3eedf9d02"
+
+
+def test_pack_digest_is_pinned_cross_os(golden_dir: Path, tmp_path: Path) -> None:
+    result = pack_bundle(
+        golden_dir / "minimal", tmp_path / "minimal.okf.tgz", member_root="minimal"
+    )
+    assert result.sha256 == GOLDEN_MINIMAL_PACK_SHA256
+    assert result.file_count == 6
+
+
+def test_okf_tgz_archives_derive_a_clean_member_root(golden_dir: Path, tmp_path: Path) -> None:
+    pack_bundle(golden_dir / "minimal", tmp_path / "handbook.okf.tgz")
+    members = _members(tmp_path / "handbook.okf.tgz")
+    assert members and all(name.startswith("handbook/") for name in members)
+
+
 def test_gzip_stream_has_no_timestamp(golden_dir: Path, tmp_path: Path) -> None:
     pack_bundle(golden_dir / "minimal", tmp_path / "t.tar.gz")
     header = io.BytesIO((tmp_path / "t.tar.gz").read_bytes()).read(8)

@@ -30,6 +30,14 @@ from okf_core.frontmatter import (
     parse_document,
     write_document,
 )
+from okf_core.image_spec import (
+    ARTIFACT_TYPE,
+    CONFIG_MEDIA_TYPE,
+    IMAGE_CONFIG_SCHEMA,
+    IMAGE_CONFIG_SCHEMA_VERSION,
+    LAYER_MEDIA_TYPE,
+    validate_image_config,
+)
 from okf_core.indexing import build_link_graph, ensure_index, search_index, write_index
 from okf_core.lint import LintConfig, lint_bundle
 from okf_core.packer import PackResult, pack_bundle, strip_okf_fields
@@ -55,9 +63,14 @@ from okf_core.revision import read_current_revision_id, revision_dir
 from okf_core.viz import build_graph, render_html, write_viz
 
 __all__ = [
+    "ARTIFACT_TYPE",
+    "CONFIG_MEDIA_TYPE",
     "DEFAULT_GENERATION_VERSION",
     "GENERATOR_VERSION",
+    "IMAGE_CONFIG_SCHEMA",
+    "IMAGE_CONFIG_SCHEMA_VERSION",
     "KNOWN_KEY_ORDER",
+    "LAYER_MEDIA_TYPE",
     "STATUS_VALUES",
     "Anchor",
     "AskResult",
@@ -110,6 +123,7 @@ __all__ = [
     "search_index",
     "sha256_hex",
     "strip_okf_fields",
+    "validate_image_config",
     "write_document",
     "write_index",
     "write_trace",
