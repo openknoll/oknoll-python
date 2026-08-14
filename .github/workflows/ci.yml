@@ -30,3 +30,23 @@ jobs:
         run: make security
       - name: Test
         run: make test
+
+  # OCI layer digests are over the compressed pack bytes, so identical trees
+  # must gzip identically on every OS/zlib build. The pinned-digest test in
+  # test_packer.py proves it; run it on both platforms we target.
+  pack-determinism:
+    name: "Pack digest determinism (${{ matrix.os }})"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install workspace
+        run: make install
+      - name: Packer suite incl. pinned cross-OS digest
+        run: uv run --no-sync pytest packages/okf-core/tests/test_packer.py -v

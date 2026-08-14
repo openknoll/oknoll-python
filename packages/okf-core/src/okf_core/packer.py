@@ -95,7 +95,14 @@ def pack_bundle(
     if not bundle_dir.is_dir():
         raise ValueError(f"{bundle_dir} is not a bundle directory")
 
-    root = member_root or archive_path.name.removesuffix(".gz").removesuffix(".tar")
+    # Derived member root strips every archive spelling: .tar.gz, .tar,
+    # .tgz, and the canonical .okf.tgz.
+    root = member_root or (
+        archive_path.name.removesuffix(".gz")
+        .removesuffix(".tar")
+        .removesuffix(".tgz")
+        .removesuffix(".okf")
+    )
     entries = _collect(bundle_dir, profile)
 
     buffer = io.BytesIO()

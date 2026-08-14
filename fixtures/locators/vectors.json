@@ -1,0 +1,223 @@
+{
+  "schema": "oknoll-locator-vectors-v1",
+  "notes": "Contract test vectors for spec/locator-grammar.md. expect is one of: valid (parsed gives the required result), ambiguous (bare name — interactive contexts only; machine contexts must reject), rejected (parse error; reason is a stable machine code).",
+  "cases": [
+    {
+      "input": "./bundle",
+      "expect": "valid",
+      "parsed": { "kind": "path", "path": "./bundle" }
+    },
+    {
+      "input": "../shared/handbook",
+      "expect": "valid",
+      "parsed": { "kind": "path", "path": "../shared/handbook" }
+    },
+    {
+      "input": "/abs/path/to/bundle",
+      "expect": "valid",
+      "parsed": { "kind": "path", "path": "/abs/path/to/bundle" }
+    },
+    {
+      "input": "~/knowledge/handbook",
+      "expect": "valid",
+      "parsed": { "kind": "path", "path": "~/knowledge/handbook" }
+    },
+    {
+      "input": "vendor/handbook.okf.tgz",
+      "expect": "valid",
+      "parsed": { "kind": "path", "path": "vendor/handbook.okf.tgz" }
+    },
+    {
+      "input": "file:./bundle",
+      "expect": "valid",
+      "parsed": { "kind": "path", "path": "./bundle" }
+    },
+    {
+      "input": "file:/abs/handbook.tar.gz",
+      "expect": "valid",
+      "parsed": { "kind": "path", "path": "/abs/handbook.tar.gz" }
+    },
+    {
+      "input": "local:handbook",
+      "expect": "valid",
+      "parsed": { "kind": "local", "name": "handbook" }
+    },
+    {
+      "input": "local:acme.handbook-2",
+      "expect": "valid",
+      "parsed": { "kind": "local", "name": "acme.handbook-2" }
+    },
+    {
+      "input": "local:acme/security-manual:4.2",
+      "expect": "rejected",
+      "reason": "alias_contains_slash"
+    },
+    {
+      "input": "local:handbook:1.0",
+      "expect": "valid",
+      "parsed": { "kind": "local", "name": "handbook", "tag": "1.0" }
+    },
+    {
+      "input": "oci://ghcr.io/acme/handbook:1.0",
+      "expect": "valid",
+      "parsed": {
+        "kind": "oci",
+        "host": "ghcr.io",
+        "repository": "acme/handbook",
+        "tag": "1.0"
+      }
+    },
+    {
+      "input": "oci://registry.openknoll.com/acme/handbook@sha256:ab348f5c0f0f45b8e42f8f1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d",
+      "expect": "valid",
+      "parsed": {
+        "kind": "oci",
+        "host": "registry.openknoll.com",
+        "repository": "acme/handbook",
+        "digest": "sha256:ab348f5c0f0f45b8e42f8f1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d"
+      }
+    },
+    {
+      "input": "oci://localhost:5000/handbook:latest",
+      "expect": "valid",
+      "parsed": {
+        "kind": "oci",
+        "host": "localhost:5000",
+        "repository": "handbook",
+        "tag": "latest"
+      }
+    },
+    {
+      "input": "oknoll://openknoll.com/acme/handbook:stable",
+      "expect": "valid",
+      "parsed": {
+        "kind": "oknoll",
+        "host": "openknoll.com",
+        "namespace": "acme",
+        "name": "handbook",
+        "tag": "stable"
+      }
+    },
+    {
+      "input": "oknoll://openknoll.com/acme/handbook",
+      "expect": "valid",
+      "parsed": {
+        "kind": "oknoll",
+        "host": "openknoll.com",
+        "namespace": "acme",
+        "name": "handbook"
+      }
+    },
+    {
+      "input": "oknoll://preview.example.dev:8443/acme/handbook@sha256:00348f5c0f0f45b8e42f8f1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d",
+      "expect": "valid",
+      "parsed": {
+        "kind": "oknoll",
+        "host": "preview.example.dev:8443",
+        "namespace": "acme",
+        "name": "handbook",
+        "digest": "sha256:00348f5c0f0f45b8e42f8f1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d"
+      }
+    },
+    {
+      "input": "handbook",
+      "expect": "ambiguous",
+      "parsed": { "kind": "bare", "name": "handbook" }
+    },
+    {
+      "input": "acme.handbook-2",
+      "expect": "ambiguous",
+      "parsed": { "kind": "bare", "name": "acme.handbook-2" }
+    },
+    {
+      "input": "",
+      "expect": "rejected",
+      "reason": "empty_locator"
+    },
+    {
+      "input": "Handbook",
+      "expect": "rejected",
+      "reason": "invalid_bare_name"
+    },
+    {
+      "input": "local:Handbook",
+      "expect": "rejected",
+      "reason": "invalid_alias"
+    },
+    {
+      "input": "local:-handbook",
+      "expect": "rejected",
+      "reason": "invalid_alias"
+    },
+    {
+      "input": "cloud:b-2d134278df22",
+      "expect": "rejected",
+      "reason": "superseded_scheme"
+    },
+    {
+      "input": "oci://ghcr.io/acme/handbook@ab348f5c0f0f45b8e42f8f1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d",
+      "expect": "rejected",
+      "reason": "bare_hash"
+    },
+    {
+      "input": "oci://ghcr.io/acme/handbook@rev-a4d583b7229c",
+      "expect": "rejected",
+      "reason": "revision_not_a_locator_digest"
+    },
+    {
+      "input": "oci://ghcr.io/acme/handbook@sha512:ab348f5c",
+      "expect": "rejected",
+      "reason": "unsupported_digest_algorithm"
+    },
+    {
+      "input": "oci://ghcr.io/acme/handbook@sha256:AB348F5C0F0F45B8E42F8F1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7F8A9B0C1D",
+      "expect": "rejected",
+      "reason": "digest_not_lowercase_hex"
+    },
+    {
+      "input": "oci://ghcr.io/acme/handbook@sha256:ab348f5c",
+      "expect": "rejected",
+      "reason": "digest_wrong_length"
+    },
+    {
+      "input": "oci://ghcr.io/acme/handbook:1.0@sha256:ab348f5c0f0f45b8e42f8f1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d",
+      "expect": "rejected",
+      "reason": "tag_and_digest"
+    },
+    {
+      "input": "oci://ghcr.io",
+      "expect": "rejected",
+      "reason": "missing_repository"
+    },
+    {
+      "input": "oci://ghcr.io/Acme/Handbook:1.0",
+      "expect": "rejected",
+      "reason": "invalid_repository"
+    },
+    {
+      "input": "oknoll://openknoll.com/handbook",
+      "expect": "rejected",
+      "reason": "missing_namespace"
+    },
+    {
+      "input": "oknoll://openknoll.com/acme/team/handbook",
+      "expect": "rejected",
+      "reason": "extra_path_segments"
+    },
+    {
+      "input": "oknoll://openknoll.com/acme/handbook:",
+      "expect": "rejected",
+      "reason": "empty_tag"
+    },
+    {
+      "input": "oknoll://openknoll.com/acme/handbook/",
+      "expect": "rejected",
+      "reason": "trailing_slash"
+    },
+    {
+      "input": "http://openknoll.com/acme/handbook",
+      "expect": "rejected",
+      "reason": "unknown_scheme"
+    }
+  ]
+}
