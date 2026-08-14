@@ -41,6 +41,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 # Typer's declarative CLI idiom requires function calls in argument defaults.
 "packages/oknoll-cli/src/oknoll_cli/main.py" = ["B008"]
+"packages/oknoll-cli/src/oknoll_cli/commands/*.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"

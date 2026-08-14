@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Phase 7 exit gate: an independent LLM agent answers a multi-hop question
-through `oknoll serve --mcp`.
+through `oknoll mcp stdio`.
 
 This client is deliberately independent of OpenKnoll internals: it reaches the
-bundle only through the MCP stdio protocol (a spawned `oknoll serve --mcp`
+bundle only through the MCP stdio protocol (a spawned `oknoll mcp stdio`
 subprocess) and the model only through the Anthropic API — the same position
 any external agent client is in. Citations come from the model's answer;
 the inspectable trace is the tool-call log this script prints as it happens.
@@ -49,7 +49,7 @@ bundle cannot answer.\
 
 
 # Only the demo's own credential is read from a project .env. An allowlist
-# matters here because this script spawns `oknoll serve --mcp` as a subprocess
+# matters here because this script spawns `oknoll mcp stdio` as a subprocess
 # that inherits the environment, and the expected workflow is to run the demo
 # from inside an arbitrary (possibly foreign) bundle directory — an unrestricted
 # loader would let that directory's .env inject PYTHONPATH, HTTPS_PROXY,
@@ -87,9 +87,8 @@ async def run_agent(bundle: Path, question: str, model: str) -> int:
                 "--project",
                 str(REPO),
                 "oknoll",
-                "serve",
-                "--mcp",
-                "--bundle",
+                "mcp",
+                "stdio",
                 str(bundle),
             ],
         )

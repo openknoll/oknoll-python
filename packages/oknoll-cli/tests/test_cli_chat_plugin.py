@@ -25,11 +25,13 @@ def _output(result: object) -> str:
 
 @pytest.fixture()
 def built_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    assert runner.invoke(app, ["init", str(tmp_path), "--name", "handbook"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["project", "init", str(tmp_path), "--name", "handbook"]).exit_code == 0
+    )
     shutil.copytree(HANDBOOK, tmp_path / "sources" / "handbook")
     monkeypatch.chdir(tmp_path)
-    assert runner.invoke(app, ["add", "sources/handbook"]).exit_code == 0
-    build = runner.invoke(app, ["build"])
+    assert runner.invoke(app, ["source", "add", "sources/handbook"]).exit_code == 0
+    build = runner.invoke(app, ["project", "build"])
     assert build.exit_code == 0, _output(build)
     return tmp_path
 
@@ -42,7 +44,7 @@ def _conversation_files(project: Path) -> list[Path]:
 
 
 def test_chat_answers_and_persists_the_conversation(built_project: Path) -> None:
-    result = runner.invoke(app, ["chat"], input="How are credentials stored?\nexit\n")
+    result = runner.invoke(app, ["query", "chat"], input="How are credentials stored?\nexit\n")
     assert result.exit_code == 0, _output(result)
     output = _output(result)
     assert "hash-only" in output
@@ -62,12 +64,12 @@ def test_chat_answers_and_persists_the_conversation(built_project: Path) -> None
 
 
 def test_chat_resume_continues_the_same_conversation(built_project: Path) -> None:
-    assert runner.invoke(app, ["chat"], input="exit\n").exit_code == 0
+    assert runner.invoke(app, ["query", "chat"], input="exit\n").exit_code == 0
     conversation_id = _conversation_files(built_project)[0].stem
 
     result = runner.invoke(
         app,
-        ["chat", "--resume", conversation_id],
+        ["query", "chat", "--resume", conversation_id],
         input="How are credentials stored?\nexit\n",
     )
     assert result.exit_code == 0, _output(result)
@@ -76,44 +78,46 @@ def test_chat_resume_continues_the_same_conversation(built_project: Path) -> Non
 
 
 def test_chat_resume_refuses_a_drifted_revision(built_project: Path) -> None:
-    assert runner.invoke(app, ["chat"], input="exit\n").exit_code == 0
+    assert runner.invoke(app, ["query", "chat"], input="exit\n").exit_code == 0
     conversation_id = _conversation_files(built_project)[0].stem
     pointer = built_project / "bundle" / ".oknoll" / "current"
     pointer.write_text("rev-000000000bad\n", encoding="utf-8")
 
-    result = runner.invoke(app, ["chat", "--resume", conversation_id], input="exit\n")
+    result = runner.invoke(app, ["query", "chat", "--resume", conversation_id], input="exit\n")
     assert result.exit_code == 1
     assert "pinned to revision" in _output(result)
     assert "start a new conversation" in _output(result)
 
 
 def test_chat_resume_mode_must_match(built_project: Path) -> None:
-    assert runner.invoke(app, ["chat", "--mode", "pd"], input="exit\n").exit_code == 0
+    assert runner.invoke(app, ["query", "chat", "--mode", "pd"], input="exit\n").exit_code == 0
     conversation_id = _conversation_files(built_project)[0].stem
 
-    result = runner.invoke(app, ["chat", "--resume", conversation_id, "--mode", "rag"])
+    result = runner.invoke(app, ["query", "chat", "--resume", conversation_id, "--mode", "rag"])
     assert result.exit_code == 1
     assert "must match" in _output(result)
 
 
 def test_chat_resume_rejects_traversal_ids(built_project: Path) -> None:
-    result = runner.invoke(app, ["chat", "--resume", "../../../etc/passwd"], input="exit\n")
+    result = runner.invoke(
+        app, ["query", "chat", "--resume", "../../../etc/passwd"], input="exit\n"
+    )
     assert result.exit_code == 1
     assert "invalid conversation id" in _output(result)
 
 
 def test_chat_resume_reports_corrupt_state_cleanly(built_project: Path) -> None:
-    assert runner.invoke(app, ["chat"], input="exit\n").exit_code == 0
+    assert runner.invoke(app, ["query", "chat"], input="exit\n").exit_code == 0
     corrupt = _conversation_files(built_project)[0]
     # valid JSON, but not a meta dict — must be a clean error, not a traceback
     corrupt.write_text("123\n", encoding="utf-8")
-    result = runner.invoke(app, ["chat", "--resume", corrupt.stem], input="exit\n")
+    result = runner.invoke(app, ["query", "chat", "--resume", corrupt.stem], input="exit\n")
     assert result.exit_code == 1
     assert "corrupt conversation state" in _output(result)
 
     # non-UTF-8 bytes are handled the same way, not as a UnicodeDecodeError
     corrupt.write_bytes(b"\xff\xfe not utf-8\n")
-    result = runner.invoke(app, ["chat", "--resume", corrupt.stem], input="exit\n")
+    result = runner.invoke(app, ["query", "chat", "--resume", corrupt.stem], input="exit\n")
     assert result.exit_code == 1
     assert "corrupt conversation state" in _output(result)
 
@@ -123,7 +127,7 @@ def test_chat_stops_when_the_pinned_revision_drifts_mid_session(
 ) -> None:
     """A rebuild mid-chat must not record turns that violate the file's pin."""
     from okf_core import read_current_revision_id
-    from oknoll_cli import main as main_mod
+    from oknoll_cli.commands import query as query_mod
 
     pinned = read_current_revision_id(built_project / "bundle")
     calls = {"n": 0}
@@ -133,9 +137,9 @@ def test_chat_stops_when_the_pinned_revision_drifts_mid_session(
         calls["n"] += 1
         return pinned if calls["n"] <= 2 else "rev-000000000new"
 
-    monkeypatch.setattr(main_mod, "read_current_revision_id", drifting)
+    monkeypatch.setattr(query_mod, "read_current_revision_id", drifting)
     result = runner.invoke(
-        app, ["chat"], input="How are credentials stored?\nsecond question\nexit\n"
+        app, ["query", "chat"], input="How are credentials stored?\nsecond question\nexit\n"
     )
     assert result.exit_code == 0, _output(result)
     output = _output(result)
@@ -153,36 +157,30 @@ def test_chat_stops_when_the_pinned_revision_drifts_mid_session(
 
 
 def test_chat_refuses_multiple_bundles(built_project: Path) -> None:
-    result = runner.invoke(app, ["chat", "--bundle", "a", "--bundle", "b"])
+    result = runner.invoke(app, ["query", "chat", "--bundle", "a", "--bundle", "b"])
     assert result.exit_code == 1
-    assert "out of scope" in _output(result)
-
-
-def test_chat_cloud_bundles_not_yet(built_project: Path) -> None:
-    result = runner.invoke(app, ["chat", "--bundle", "cloud:acme/handbook"])
-    assert result.exit_code == 2
-    assert "not implemented yet" in _output(result)
+    assert "at most one --bundle" in _output(result)
 
 
 def test_chat_rejects_unknown_mode(built_project: Path) -> None:
-    result = runner.invoke(app, ["chat", "--mode", "stuff"])
+    result = runner.invoke(app, ["query", "chat", "--mode", "stuff"])
     assert result.exit_code == 2
     assert "unknown mode" in _output(result)
 
 
 def test_chat_needs_a_built_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    assert runner.invoke(app, ["init", str(tmp_path), "--name", "empty"]).exit_code == 0
+    assert runner.invoke(app, ["project", "init", str(tmp_path), "--name", "empty"]).exit_code == 0
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["chat"], input="exit\n")
+    result = runner.invoke(app, ["query", "chat"], input="exit\n")
     assert result.exit_code == 1
-    assert "run `oknoll build` first" in _output(result)
+    assert "run `oknoll project build` first" in _output(result)
 
 
 # -- plugin ------------------------------------------------------------------
 
 
 def test_plugin_list_names_the_first_party_connectors() -> None:
-    result = runner.invoke(app, ["plugin", "list"])
+    result = runner.invoke(app, ["system", "plugins", "list"])
     assert result.exit_code == 0, _output(result)
     output = _output(result)
     for name in ("files", "web", "github"):
@@ -190,7 +188,7 @@ def test_plugin_list_names_the_first_party_connectors() -> None:
 
 
 def test_plugin_inspect_shows_metadata() -> None:
-    result = runner.invoke(app, ["plugin", "inspect", "web"])
+    result = runner.invoke(app, ["system", "plugins", "inspect", "web"])
     assert result.exit_code == 0, _output(result)
     output = _output(result)
     assert "web" in output
@@ -198,13 +196,13 @@ def test_plugin_inspect_shows_metadata() -> None:
 
 
 def test_plugin_inspect_unknown_fails() -> None:
-    result = runner.invoke(app, ["plugin", "inspect", "gopher"])
+    result = runner.invoke(app, ["system", "plugins", "inspect", "gopher"])
     assert result.exit_code == 1
     assert "no such connector" in _output(result)
 
 
 @pytest.mark.parametrize("name", ["files", "web", "github"])
 def test_plugin_validate_passes_for_shipped_connectors(name: str) -> None:
-    result = runner.invoke(app, ["plugin", "validate", name])
+    result = runner.invoke(app, ["system", "plugins", "validate", name])
     assert result.exit_code == 0, _output(result)
     assert "conforms" in _output(result)

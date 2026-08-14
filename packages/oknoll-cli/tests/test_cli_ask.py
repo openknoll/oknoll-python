@@ -28,17 +28,19 @@ def _output(result: object) -> str:
 
 @pytest.fixture()
 def built_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    assert runner.invoke(app, ["init", str(tmp_path), "--name", "handbook"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["project", "init", str(tmp_path), "--name", "handbook"]).exit_code == 0
+    )
     shutil.copytree(HANDBOOK, tmp_path / "sources" / "handbook")
     monkeypatch.chdir(tmp_path)
-    assert runner.invoke(app, ["add", "sources/handbook"]).exit_code == 0
-    build = runner.invoke(app, ["build"])
+    assert runner.invoke(app, ["source", "add", "sources/handbook"]).exit_code == 0
+    build = runner.invoke(app, ["project", "build"])
     assert build.exit_code == 0, _output(build)
     return tmp_path
 
 
 def test_ask_prints_answer_citations_and_trace(built_project: Path) -> None:
-    result = runner.invoke(app, ["ask", "How are credentials stored?"])
+    result = runner.invoke(app, ["query", "ask", "How are credentials stored?"])
     assert result.exit_code == 0, _output(result)
     output = _output(result)
     assert "hash-only" in output
@@ -49,7 +51,9 @@ def test_ask_prints_answer_citations_and_trace(built_project: Path) -> None:
 
 
 def test_ask_mode_rag_runs_the_vector_baseline(built_project: Path) -> None:
-    result = runner.invoke(app, ["ask", "How are credentials stored?", "--mode", "rag", "--json"])
+    result = runner.invoke(
+        app, ["query", "ask", "How are credentials stored?", "--mode", "rag", "--json"]
+    )
     assert result.exit_code == 0, _output(result)
     payload = json.loads(result.output)
     assert payload["trace"]["condition"] == "rag"
@@ -62,13 +66,13 @@ def test_ask_mode_rag_runs_the_vector_baseline(built_project: Path) -> None:
 
 
 def test_ask_rejects_unknown_mode(built_project: Path) -> None:
-    result = runner.invoke(app, ["ask", "anything", "--mode", "stuff"])
+    result = runner.invoke(app, ["query", "ask", "anything", "--mode", "stuff"])
     assert result.exit_code == 2
     assert "unknown mode" in _output(result)
 
 
 def test_ask_json_is_machine_readable(built_project: Path) -> None:
-    result = runner.invoke(app, ["ask", "How are credentials stored?", "--json"])
+    result = runner.invoke(app, ["query", "ask", "How are credentials stored?", "--json"])
     assert result.exit_code == 0, _output(result)
     payload = json.loads(result.output)
     assert set(payload) >= {"question", "answer", "citations", "warnings", "trace", "trace_path"}
@@ -80,7 +84,9 @@ def test_ask_json_is_machine_readable(built_project: Path) -> None:
 
 
 def test_ask_abstains_rather_than_inventing(built_project: Path) -> None:
-    result = runner.invoke(app, ["ask", "What is the Zanzibar revenue forecast?", "--json"])
+    result = runner.invoke(
+        app, ["query", "ask", "What is the Zanzibar revenue forecast?", "--json"]
+    )
     assert result.exit_code == 0, _output(result)
     payload = json.loads(result.output)
     assert payload["abstained"] is True
@@ -89,23 +95,23 @@ def test_ask_abstains_rather_than_inventing(built_project: Path) -> None:
 
 
 def test_ask_needs_a_built_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    assert runner.invoke(app, ["init", str(tmp_path), "--name", "empty"]).exit_code == 0
+    assert runner.invoke(app, ["project", "init", str(tmp_path), "--name", "empty"]).exit_code == 0
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["ask", "anything?"])
+    result = runner.invoke(app, ["query", "ask", "anything?"])
     assert result.exit_code == 1
-    assert "run `oknoll build` first" in _output(result)
+    assert "run `oknoll project build` first" in _output(result)
 
 
 def test_ask_needs_a_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["ask", "anything?"])
+    result = runner.invoke(app, ["query", "ask", "anything?"])
     assert result.exit_code == 1
     assert "no oknoll.toml found" in _output(result)
 
 
 def test_ask_answers_a_multi_hop_question(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The exit-gate question, over the frozen multi-hop bundle."""
-    assert runner.invoke(app, ["init", str(tmp_path), "--name", "ops"]).exit_code == 0
+    assert runner.invoke(app, ["project", "init", str(tmp_path), "--name", "ops"]).exit_code == 0
     shutil.rmtree(tmp_path / "bundle")
     shutil.copytree(MULTIHOP, tmp_path / "bundle")
     pointer = tmp_path / "bundle" / ".oknoll" / "current"
@@ -113,7 +119,9 @@ def test_ask_answers_a_multi_hop_question(tmp_path: Path, monkeypatch: pytest.Mo
     pointer.write_text("rev-frozen000000\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    result = runner.invoke(app, ["ask", "Who must sign off a production release?", "--json"])
+    result = runner.invoke(
+        app, ["query", "ask", "Who must sign off a production release?", "--json"]
+    )
     assert result.exit_code == 0, _output(result)
     payload = json.loads(result.output)
     assert "engineering director" in payload["answer"]
