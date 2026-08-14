@@ -86,6 +86,10 @@ behavior.
 
 Two long-lived branches: `develop` (integration) and `main` (promoted only by PR from
 `develop`). Feature branches come off `develop`; never commit to `main` directly.
+**Temporary during the v0.4.0 runtime evolution:** `preview` is the evolution
+integration branch — evolution feature branches merge there instead of `develop`
+(CI runs on it; `v0.4.0aN` alpha tags are cut from it); it merges into `develop`
+at v0.4.0 stabilization and is then deleted.
 Standing preference: when a feature branch is complete and checks are green, merge into
 `develop` (`git merge --no-ff`), re-run `make test` on `develop`, and push.
 

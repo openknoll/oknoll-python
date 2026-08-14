@@ -2,9 +2,11 @@ name: CI
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [develop, main, preview]
   push:
-    branches: [develop, main]
+    # preview is the temporary v0.4.0 evolution integration branch:
+    # feature branches merge there (not develop) until stabilization.
+    branches: [develop, main, preview]
 
 permissions:
   contents: read
