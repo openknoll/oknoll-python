@@ -23,11 +23,13 @@ _CONCEPT_SYSTEM = (
 
 _PLAN_SYSTEM = (
     "You plan concept boundaries for a knowledge bundle. Given a document's "
-    "section outline, group the sections into a small number of coherent "
-    "concepts. Reply with JSON only — no prose, no code fences — of the form "
-    '{"concepts": [{"title": "...", "sections": [0, 1]}, ...]}. Every section '
-    "index must appear in exactly one concept. Prefer contiguous runs of "
-    "sections and one to six concepts; titles are short noun phrases drawn "
+    "section outline (headings, opening snippets, and subheadings), group the "
+    "sections into coherent, focused concepts — one concept per topic an agent "
+    "might look up on its own. Reply with JSON only — no prose, no code fences "
+    '— of the form {"concepts": [{"title": "...", "sections": [0, 1]}, ...]}. '
+    "Every section index must appear in exactly one concept. Prefer contiguous "
+    "runs of sections; substantial documents typically yield two to eight "
+    "concepts, and never more than twelve. Titles are short noun phrases drawn "
     "from the outline's own vocabulary. If the document is best kept as a "
     'single concept, reply {"concepts": []}.'
 )
@@ -85,6 +87,10 @@ def render(prompt_id: str, payload: dict[str, Any]) -> tuple[str, str]:
             heading = str(item.get("heading", "")).strip()
             snippet = str(item.get("snippet", "")).strip()
             lines.append(f"{index}. {heading} — {snippet}" if snippet else f"{index}. {heading}")
+            subheadings = item.get("subheadings")
+            subs = [str(s).strip() for s in subheadings] if isinstance(subheadings, list) else []
+            if any(subs):
+                lines.append(f"   subsections: {'; '.join(s for s in subs if s)}")
         outline = "\n".join(lines) if lines else "(no sections)"
         user = f"Document title: {title}\n\nSections:\n{outline}"
         return _PLAN_SYSTEM, user

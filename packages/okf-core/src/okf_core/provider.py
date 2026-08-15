@@ -26,7 +26,9 @@ PROMPT_VERSIONS: dict[str, str] = {
     # 2: input is the concept's section outline (not the first paragraph) and
     #    the first sentence must stand alone as the index-line summary.
     "concept-description": "2",
-    "concept-plan": "1",
+    # 2: outline payload gained per-section subheadings and longer snippets;
+    #    guidance retuned from "one to six" to topic-per-concept granularity.
+    "concept-plan": "2",
     "reference-description": "1",
     "bundle-description": "1",
     "answer-question": "1",

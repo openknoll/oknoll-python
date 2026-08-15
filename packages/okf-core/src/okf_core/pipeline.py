@@ -188,10 +188,17 @@ _DIGEST_PROSE_KINDS = frozenset({"paragraph", "quote", "list"})
 
 # Concept-plan bounds: the model only groups outline sections and names the
 # groups — it never contributes body text, and a plan outside these bounds is
-# discarded in favor of one concept per document.
+# discarded in favor of one concept per document. An oversized single-section
+# slice may be re-planned once at the next heading level (bounded recursion),
+# so a document whose topics hide under one huge section still splits.
 PLAN_MAX_CONCEPTS = 12
-PLAN_SNIPPET_CHARS = 200
+PLAN_SNIPPET_CHARS = 400
 PLAN_TITLE_CHARS = 120
+PLAN_SUBHEADINGS_MAX = 8
+PLAN_SUBHEADING_CHARS = 100
+SPLIT_THRESHOLD_CHARS = 6_000
+PLAN_MAX_DEPTH = 1
+PLAN_MAX_CONCEPTS_TOTAL = 24
 
 # Cross-concept references per concept; capped like the explorer's link fan-out
 # so one hub concept cannot dominate navigation.
@@ -398,11 +405,59 @@ def _validate_plan(concepts: Any, section_count: int) -> list[dict[str, Any]] | 
     return plan
 
 
+def _subheadings(section_blocks: list[Block]) -> list[str]:
+    """Digest-cleaned next-level headings inside one section (bounded)."""
+    levels = [b.level or 1 for b in section_blocks[1:] if b.kind == "heading"]
+    if not levels:
+        return []
+    sub_level = min(levels)
+    return [
+        _digest_text(b.text)[:PLAN_SUBHEADING_CHARS]
+        for b in section_blocks[1:]
+        if b.kind == "heading" and (b.level or 1) == sub_level
+    ][:PLAN_SUBHEADINGS_MAX]
+
+
+def _split_candidate(
+    doc: CanonicalDoc,
+    entry: dict[str, Any],
+    preamble: list[Block],
+    sections: list[tuple[str, list[Block]]],
+) -> CanonicalDoc | None:
+    """A sub-document to re-plan, when one slice is a single oversized section.
+
+    Only a slice that is exactly one section qualifies (a grouped slice was a
+    deliberate model decision), the preamble must not ride along (splitting
+    would drop it), the rendered text must exceed the threshold, and the
+    section must actually contain enough next-level structure to plan over.
+    The sub-document drops the section heading, so ``_split_sections``'s
+    adaptive level segments it at the next heading level unchanged.
+    """
+    if len(entry["sections"]) != 1:
+        return None
+    [index] = entry["sections"]
+    if index == 0 and preamble:
+        return None
+    heading, section_blocks = sections[index]
+    if len(render_blocks(section_blocks)) <= SPLIT_THRESHOLD_CHARS:
+        return None
+    title = _digest_text(heading)[:PLAN_TITLE_CHARS].strip()
+    if not title:
+        return None
+    sub_doc = replace(doc, title=title, blocks=tuple(section_blocks[1:]))
+    _, sub_sections = _split_sections(sub_doc)
+    if len(sub_sections) < 3:
+        return None
+    return sub_doc
+
+
 def _planned_docs(
     doc: CanonicalDoc,
     provider: ModelProvider,
     cache: BuildCache,
     generation_version: str,
+    *,
+    depth: int = 0,
 ) -> list[CanonicalDoc]:
     """Bounded model split of one document into concept slices.
 
@@ -410,6 +465,10 @@ def _planned_docs(
     content hash so rebuilds replay it byte-for-byte and ``diff --check`` stays
     green behind a nondeterministic model. The model sees only link-stripped
     outline text and contributes only boundaries and titles, never body text.
+    An oversized single-section slice is re-planned once at the next heading
+    level (``PLAN_MAX_DEPTH``); each sub-plan is a separately cached decision
+    keyed by the sub-document's content, and the total slice count per source
+    document is capped at ``PLAN_MAX_CONCEPTS_TOTAL`` in plan order.
     """
     preamble, sections = _split_sections(doc)
     if len(sections) < 2:
@@ -432,6 +491,7 @@ def _planned_docs(
                     "snippet": _digest_text(
                         next((b.text for b in blocks if b.kind in _DIGEST_PROSE_KINDS), "")
                     )[:PLAN_SNIPPET_CHARS],
+                    "subheadings": _subheadings(blocks),
                 }
                 for i, (heading, blocks) in enumerate(sections)
             ],
@@ -455,15 +515,30 @@ def _planned_docs(
     if not plan:
         return [doc]
 
-    slices: list[CanonicalDoc] = []
-    for entry in plan:
+    out: list[CanonicalDoc] = []
+    for position, entry in enumerate(plan):
         slice_blocks: list[Block] = []
         if 0 in entry["sections"]:
             slice_blocks.extend(preamble)
         for index in entry["sections"]:
             slice_blocks.extend(sections[index][1])
-        slices.append(replace(doc, title=entry["title"], blocks=tuple(slice_blocks)))
-    return slices
+        slice_doc = replace(doc, title=entry["title"], blocks=tuple(slice_blocks))
+
+        if depth < PLAN_MAX_DEPTH:
+            sub_doc = _split_candidate(doc, entry, preamble, sections)
+            if sub_doc is not None:
+                sub_slices = _planned_docs(
+                    sub_doc, provider, cache, generation_version, depth=depth + 1
+                )
+                remaining = len(plan) - position - 1
+                if (
+                    len(sub_slices) > 1
+                    and len(out) + len(sub_slices) + remaining <= PLAN_MAX_CONCEPTS_TOTAL
+                ):
+                    out.extend(sub_slices)
+                    continue
+        out.append(slice_doc)
+    return out
 
 
 def _plan(
