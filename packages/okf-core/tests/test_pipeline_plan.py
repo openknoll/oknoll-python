@@ -319,13 +319,13 @@ def test_failed_build_keeps_cache_so_retry_is_incremental(tmp_path: Path) -> Non
     assert cache_file.is_file()
     assert "concepts" in cache_file.read_text(encoding="utf-8")
 
-    # The retry replays every cached decision and re-asks only for the one
-    # field that never succeeded.
+    # The retry replays every cached decision and asks only for the field that
+    # never succeeded plus the bundle description the failed build never reached.
     calls_before = len(provider.calls)
     provider.fail_title = ""
     outcome = _build(tmp_path, provider)
     assert outcome.published
-    assert len(provider.calls) - calls_before == 1
+    assert provider.calls[calls_before:] == ["concept-description", "bundle-description"]
 
 
 # -- generation_version knob -------------------------------------------------

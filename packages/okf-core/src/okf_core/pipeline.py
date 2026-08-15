@@ -197,12 +197,36 @@ PLAN_TITLE_CHARS = 120
 # so one hub concept cannot dominate navigation.
 RELATED_MAX_LINKS = 5
 
+# Self-describing bundle bounds. Index entry lines carry one sentence so the
+# root index stays a scannable router; the reference/bundle description prompts
+# see bounded, link-stripped material only.
+INDEX_LINE_CHARS = 200
+REFERENCE_DESC_INPUT_CHARS = 3_000
+REFERENCE_DESC_CHARS = 300
+BUNDLE_DESC_MAX_CONCEPTS = 40
+BUNDLE_DESC_PAYLOAD_CHARS = 6_000
+BUNDLE_DESC_CHARS = 500
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s")
+
 
 def _digest_text(text: str) -> str:
     # Footnote tokens go too: a bare marker would dangle (no definition follows
     # it into the digest) and a leading `[^id]:` could forge a definition that
     # shadows the generated provenance footnote.
     return " ".join(_FOOTNOTE_TOKEN_RE.sub("", _strip_links(text)).split())
+
+
+def _index_line(text: str) -> str:
+    """First sentence of a description, sanitized for a root-index bullet.
+
+    Model descriptions render inside index bullets, so the text is link-stripped
+    and whitespace-collapsed (``_digest_text``) — a hostile description can never
+    smuggle a live link or newline into the index — then cut at the first
+    sentence boundary and length-capped.
+    """
+    first = _SENTENCE_SPLIT_RE.split(_digest_text(text), maxsplit=1)[0]
+    return first[:INDEX_LINE_CHARS].strip()
 
 
 def _section_digest(doc: CanonicalDoc) -> list[str]:
@@ -532,20 +556,69 @@ def _generate(
     cache: BuildCache,
     clock: Callable[[], str],
     generation_version: str,
-) -> None:
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Write references and concepts; return their descriptions keyed by bundle
+    path (``concepts_by_path, references_by_path``) so the link stage can build
+    a descriptive index without re-asking the provider."""
     related = _related_links(plans)
+    reference_descriptions: dict[str, str] = {}
     for unit in units:
-        _write_reference_snapshot(stage, unit)
+        reference_descriptions[unit.ref_path] = _write_reference_snapshot(
+            stage, unit, provider, cache, generation_version
+        )
+    concept_descriptions: dict[str, str] = {}
     for plan in plans:
-        _write_concept(
+        concept_descriptions[plan.concept_path] = _write_concept(
             stage, plan, provider, cache, clock, generation_version, related[plan.concept_path]
         )
+    return concept_descriptions, reference_descriptions
 
 
-def _write_reference_snapshot(stage: Path, unit: _SourceUnit) -> None:
+def _reference_description(
+    unit: _SourceUnit,
+    provider: ModelProvider,
+    cache: BuildCache,
+    generation_version: str,
+) -> str:
+    """One-sentence description of an acquired source, cached like every other
+    model-generated field; unusable output falls back deterministically and the
+    fallback decision is cached."""
+    key = generation_cache_key(
+        content_hash=sha256_hex("\x00".join(doc.content_hash() for doc in unit.docs)),
+        prompt_id="reference-description",
+        provider_id=provider.id,
+        generation_version=generation_version,
+    )
+    cached = cache.generated(key)
+    if cached is None:
+        outline = "\n\n".join(part for doc in unit.docs for part in _section_digest(doc))[
+            :REFERENCE_DESC_INPUT_CHARS
+        ]
+        payload = {"title": unit.title, "outline": outline}
+        raw = _complete(provider, "reference-description", payload, unit.title)
+        cached = {
+            "description": _digest_text(raw)[:REFERENCE_DESC_CHARS].strip(),
+            "model": _served_model(provider),
+        }
+        cache.store_generated(key, cached)
+    # Re-validate on the way out: the cache is derived state and may be foreign.
+    description = str(cached.get("description", "")) if isinstance(cached, dict) else ""
+    description = _digest_text(description)[:REFERENCE_DESC_CHARS].strip()
+    return description or f"Acquired source snapshot: {unit.title}."
+
+
+def _write_reference_snapshot(
+    stage: Path,
+    unit: _SourceUnit,
+    provider: ModelProvider,
+    cache: BuildCache,
+    generation_version: str,
+) -> str:
+    description = _reference_description(unit, provider, cache, generation_version)
     frontmatter = Frontmatter(
         data={
             "title": unit.title,
+            "description": description,
             "openknoll_source": {
                 "connector": unit.connector_id,
                 "connector_version": unit.connector_version,
@@ -558,6 +631,7 @@ def _write_reference_snapshot(stage: Path, unit: _SourceUnit) -> None:
     )
     body = "\n\n".join(rendered for doc in unit.docs if (rendered := render_blocks(doc.blocks)))
     _write_file(stage / unit.ref_path, write_document(ParsedDocument(frontmatter, body)))
+    return description
 
 
 def _complete(provider: ModelProvider, prompt_id: str, payload: dict[str, Any], title: str) -> str:
@@ -628,10 +702,14 @@ def _write_concept(
     clock: Callable[[], str],
     generation_version: str,
     related: list[ConceptPlan],
-) -> None:
+) -> str:
     doc, unit = plan.doc, plan.unit
     generated = _generated_fields(doc, provider, cache, clock, generation_version)
-    description = str(generated["description"])
+    # The description is model output rendered into the bundle body and
+    # frontmatter: link-strip and collapse it like every other model field so
+    # it can never smuggle a live link past lint (the cache keeps the raw
+    # reply; sanitization is deterministic on the way out).
+    description = _digest_text(str(generated["description"]))
 
     frontmatter = Frontmatter(
         data={
@@ -654,21 +732,106 @@ def _write_concept(
 
     body = "\n\n".join(sections)
     _write_file(stage / plan.concept_path, write_document(ParsedDocument(frontmatter, body)))
+    return description
 
 
-def _link(stage: Path, project_name: str, plans: list[ConceptPlan]) -> None:
-    """Generate the root index with bundle-root-absolute links."""
+def _bundle_description(
+    project_name: str,
+    plans: list[ConceptPlan],
+    concept_descriptions: dict[str, str],
+    provider: ModelProvider,
+    cache: BuildCache,
+    generation_version: str,
+) -> str:
+    """Bundle-level description for the root index, from concept/reference
+    titles and descriptions only.
+
+    The cache content hash is the hash of the payload itself — a pure function
+    of the ordered per-concept content — so rebuilds replay the decision and
+    ``diff --check`` stays green. Unusable output falls back deterministically
+    and the fallback decision is cached.
+    """
+    if not plans:
+        return f"OKF bundle for {project_name}."
+
+    ordered = sorted(plans, key=lambda p: p.concept_path)
+    concepts: list[dict[str, str]] = [
+        {
+            "title": plan.doc.title,
+            "description": _index_line(concept_descriptions.get(plan.concept_path, "")),
+        }
+        for plan in ordered[:BUNDLE_DESC_MAX_CONCEPTS]
+    ]
+    seen_refs: dict[str, str] = {}
+    for plan in ordered:
+        seen_refs.setdefault(plan.unit.ref_path, plan.unit.title)
+    references = [title for _, title in sorted(seen_refs.items())]
+    payload = {"name": project_name, "concepts": concepts, "references": references}
+    if len(json.dumps(payload)) > BUNDLE_DESC_PAYLOAD_CHARS:
+        # Over budget: drop descriptions first, then trim entries, Google-style.
+        concepts = [{"title": entry["title"]} for entry in concepts]
+        payload = {"name": project_name, "concepts": concepts, "references": references}
+        while concepts and len(json.dumps(payload)) > BUNDLE_DESC_PAYLOAD_CHARS:
+            concepts.pop()
+            payload = {"name": project_name, "concepts": concepts, "references": references}
+
+    key = generation_cache_key(
+        content_hash=sha256_hex(json.dumps(payload, sort_keys=True)),
+        prompt_id="bundle-description",
+        provider_id=provider.id,
+        generation_version=generation_version,
+    )
+    cached = cache.generated(key)
+    if cached is None:
+        raw = _complete(provider, "bundle-description", payload, project_name)
+        cached = {
+            "description": _digest_text(raw)[:BUNDLE_DESC_CHARS].strip(),
+            "model": _served_model(provider),
+        }
+        cache.store_generated(key, cached)
+    # Re-validate on the way out: the cache is derived state and may be foreign.
+    description = str(cached.get("description", "")) if isinstance(cached, dict) else ""
+    description = _digest_text(description)[:BUNDLE_DESC_CHARS].strip()
+    if description:
+        return description
+    covered = ", ".join(plan.doc.title for plan in ordered[:5])
+    return (
+        f"Knowledge bundle for {project_name}: {len(plans)} concept(s) from "
+        f"{len(seen_refs)} source(s), covering {covered}."
+    )
+
+
+def _index_entry(title: str, path: str, description: str) -> str:
+    line = _index_line(description)
+    link = f"- [{title}](/{path})"
+    return f"{link} - {line}" if line else link
+
+
+def _link(
+    stage: Path,
+    project_name: str,
+    plans: list[ConceptPlan],
+    concept_descriptions: dict[str, str],
+    reference_descriptions: dict[str, str],
+    bundle_description: str,
+) -> None:
+    """Generate the root index: bundle-root-absolute links, each entry carrying
+    a one-sentence sanitized description (see ``_index_line``)."""
     frontmatter = Frontmatter(
         data={
             "okf_version": "0.2",
             "title": project_name,
-            "description": f"OKF bundle for {project_name}.",
+            "description": bundle_description,
         }
     )
     lines = [f"# {project_name}"]
     if plans:
         concept_links = "\n".join(
-            f"- [{plan.doc.title}](/{plan.concept_path})"
+            _index_entry(
+                plan.doc.title,
+                plan.concept_path,
+                concept_descriptions.get(plan.concept_path, ""),
+            )
             for plan in sorted(plans, key=lambda p: p.concept_path)
         )
         lines.append(f"## Concepts\n\n{concept_links}")
@@ -676,7 +839,8 @@ def _link(stage: Path, project_name: str, plans: list[ConceptPlan]) -> None:
         for plan in plans:
             seen_refs.setdefault(plan.unit.ref_path, plan.unit.title)
         reference_links = "\n".join(
-            f"- [{title}](/{ref_path})" for ref_path, title in sorted(seen_refs.items())
+            _index_entry(title, ref_path, reference_descriptions.get(ref_path, ""))
+            for ref_path, title in sorted(seen_refs.items())
         )
         lines.append(f"## References\n\n{reference_links}")
     else:
@@ -722,14 +886,19 @@ def build_revision(
     try:
         units = _acquire_and_normalize(sources, cache)
         plans = _plan(units, provider, cache, generation_version)
-        _generate(stage, units, plans, provider, cache, clock, generation_version)
+        concept_descriptions, reference_descriptions = _generate(
+            stage, units, plans, provider, cache, clock, generation_version
+        )
+        description = _bundle_description(
+            project_name, plans, concept_descriptions, provider, cache, generation_version
+        )
     except Exception:
         # A failed build (e.g. one refused model call) must not discard the
         # model decisions that already succeeded: the cache is content-keyed,
         # so persisting it is always safe and makes a retry incremental.
         cache.save()
         raise
-    _link(stage, project_name, plans)
+    _link(stage, project_name, plans, concept_descriptions, reference_descriptions, description)
 
     revision_id = compute_revision_id(stage)
     current = read_current_revision_id(bundle_dir)

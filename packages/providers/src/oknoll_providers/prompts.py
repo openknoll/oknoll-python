@@ -29,6 +29,23 @@ _PLAN_SYSTEM = (
     'single concept, reply {"concepts": []}.'
 )
 
+_REFERENCE_SYSTEM = (
+    "You write a one-sentence description of an acquired source document in a "
+    "knowledge bundle. You are given its title and section outline. Use only "
+    "the material given — never invent facts. Reply with exactly one plain "
+    "prose sentence, roughly 8 to 30 words, stating what the document contains "
+    "and what it is useful for. No headings, no lists, no preamble."
+)
+
+_BUNDLE_SYSTEM = (
+    "You write the description for the root index of a knowledge bundle. You "
+    "are given the bundle's name and the titles and descriptions of its "
+    "concepts and acquired sources. Reply with one to two plain prose "
+    "sentences, roughly 15 to 50 words, stating what the bundle covers and "
+    "what an agent can find in it. Use only the material given — never invent "
+    "topics. No headings, no lists, no preamble."
+)
+
 _ANSWER_SYSTEM = (
     "You answer questions using only the evidence passages provided. Every "
     "claim in your answer must be supported by one of the passages; cite the "
@@ -61,6 +78,29 @@ def render(prompt_id: str, payload: dict[str, Any]) -> tuple[str, str]:
         outline = "\n".join(lines) if lines else "(no sections)"
         user = f"Document title: {title}\n\nSections:\n{outline}"
         return _PLAN_SYSTEM, user
+    if prompt_id == "reference-description":
+        title = str(payload.get("title", "")).strip() or "(untitled source)"
+        outline = str(payload.get("outline", "")).strip() or "(no outline)"
+        user = f"Source title: {title}\n\nSection outline:\n{outline}"
+        return _REFERENCE_SYSTEM, user
+    if prompt_id == "bundle-description":
+        name = str(payload.get("name", "")).strip() or "(unnamed bundle)"
+        concepts = payload.get("concepts")
+        concept_items = concepts if isinstance(concepts, list) else []
+        concept_lines: list[str] = []
+        for item in concept_items:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "")).strip()
+            description = str(item.get("description", "")).strip()
+            concept_lines.append(f"- {title}: {description}" if description else f"- {title}")
+        references = payload.get("references")
+        reference_items = references if isinstance(references, list) else []
+        reference_lines = [f"- {str(item).strip()}" for item in reference_items]
+        concept_text = "\n".join(concept_lines) if concept_lines else "(none)"
+        reference_text = "\n".join(reference_lines) if reference_lines else "(none)"
+        user = f"Bundle name: {name}\n\nConcepts:\n{concept_text}\n\nSources:\n{reference_text}"
+        return _BUNDLE_SYSTEM, user
     if prompt_id == "answer-question":
         question = str(payload.get("question", "")).strip()
         evidence = payload.get("evidence")

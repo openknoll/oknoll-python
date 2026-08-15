@@ -18,10 +18,15 @@ from okf_core.canonical import sha256_hex
 # 3: concepts carry a Related section and may be model-planned slices of a
 #    source — cached plans and stamps from the one-concept-per-doc era must
 #    not pair with the new bodies.
-GENERATOR_VERSION = "3"
+# 4: self-describing bundles — index entries carry per-entry descriptions,
+#    reference snapshots and the root index carry model-generated
+#    descriptions — v3 stamps and plans must not pair with the new bodies.
+GENERATOR_VERSION = "4"
 PROMPT_VERSIONS: dict[str, str] = {
     "concept-description": "1",
     "concept-plan": "1",
+    "reference-description": "1",
+    "bundle-description": "1",
     "answer-question": "1",
 }
 
@@ -56,6 +61,17 @@ class StubModelProvider:
             # The stub never splits: an empty concept list means "keep the
             # document as one concept", the pre-planner behavior.
             return '{"concepts": []}'
+        if prompt_id == "reference-description":
+            title = str(payload.get("title", "")).strip() or "this source"
+            return f"Acquired source snapshot of {title}."
+        if prompt_id == "bundle-description":
+            name = str(payload.get("name", "")).strip() or "this bundle"
+            concepts = payload.get("concepts")
+            count = len(concepts) if isinstance(concepts, list) else 0
+            return (
+                f"Knowledge bundle for {name} covering {count} concept(s) "
+                "built from acquired sources."
+            )
         if prompt_id == "answer-question":
             evidence = payload.get("evidence")
             items = evidence if isinstance(evidence, list) else []
