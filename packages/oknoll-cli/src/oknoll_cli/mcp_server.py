@@ -29,6 +29,7 @@ from okf_core import __version__ as core_version
 from okf_core.explorer import (
     MAX_LINK_EDGES,
     MAX_LIST_LIMIT,
+    MAX_OVERVIEW_ENTRIES,
     MAX_PEEK_LINES,
     MAX_READ_CHARS,
     MAX_SEARCH_LIMIT,
@@ -93,8 +94,10 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
         name="overview",
         description=(
             "Bundle overview: title, description, current revision id, concept/"
-            "reference counts, type/tag/status/trust/freshness summary. Call "
-            "this first."
+            "reference counts, type/tag/status/trust/freshness summary, and the "
+            f"top {MAX_OVERVIEW_ENTRIES} `contents` entries with descriptions "
+            "(`contents_total` is the honest count; use `list` for the "
+            "complete, filterable listing). Call this first."
         ),
         annotations=_READ_ONLY,
     )
@@ -131,8 +134,9 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
     @server.tool(
         name="search",
         description=(
-            "Ranked lexical search over the bundle: snippets and paths only, "
-            f"never full bodies. Bounded to {MAX_SEARCH_LIMIT} results; scores recorded."
+            "Ranked lexical search over the bundle: per-hit path, description, "
+            f"and snippet — never full bodies. Bounded to {MAX_SEARCH_LIMIT} "
+            "results; scores recorded."
         ),
         annotations=_READ_ONLY,
     )

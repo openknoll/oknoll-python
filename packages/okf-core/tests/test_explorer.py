@@ -57,6 +57,50 @@ def test_overview_summarizes_types_tags_and_trust(minimal: Path) -> None:
     assert overview["freshness"] == {"stale": 0}
 
 
+def test_overview_contents_follows_index_order_with_sorted_tail(minimal: Path) -> None:
+    overview = Explorer(minimal).overview()
+    assert overview["contents_total"] == 3
+    entries = overview["contents"]
+    # Index link order first (authentication before architecture, as the index
+    # curates it), then files the index does not link, in sorted-path order.
+    assert [e["path"] for e in entries] == [
+        "concepts/authentication.md",
+        "concepts/architecture.md",
+        "references/source-001.md",
+    ]
+    by_path = {e["path"]: e for e in entries}
+    assert by_path["concepts/architecture.md"]["title"] == "System architecture"
+    assert by_path["concepts/architecture.md"]["description"] == (
+        "The deployable workloads and their trust boundaries."
+    )
+    # The frontmatter-less reference still gets a stable entry.
+    assert by_path["references/source-001.md"]["description"] is None
+
+
+def test_overview_contents_is_bounded_and_clipped(minimal: Path) -> None:
+    target = minimal / "concepts" / "architecture.md"
+    text = target.read_text(encoding="utf-8")
+    long_description = "D" * 1_000
+    target.write_text(
+        text.replace(
+            "description: The deployable workloads and their trust boundaries.",
+            f"description: {long_description}",
+        ),
+        encoding="utf-8",
+    )
+    for index in range(30):
+        (minimal / "concepts" / f"filler-{index:02d}.md").write_text(
+            f"---\ntitle: Filler {index}\ntype: Concept\n---\n\nFiller body.\n",
+            encoding="utf-8",
+        )
+    overview = Explorer(minimal).overview()
+    assert overview["contents_total"] == 33
+    assert len(overview["contents"]) == explorer_mod.MAX_OVERVIEW_ENTRIES
+    by_path = {e["path"]: e for e in overview["contents"]}
+    clipped = str(by_path["concepts/architecture.md"]["description"])
+    assert len(clipped) == explorer_mod.MAX_OVERVIEW_DESCRIPTION_CHARS
+
+
 def test_tools_share_one_file_snapshot_across_a_mid_session_rebuild(minimal: Path) -> None:
     """A file appearing mid-session must not desync overview/list from _parse.
 
@@ -120,7 +164,9 @@ def test_search_is_ranked_deterministic_and_snippet_only(minimal: Path) -> None:
     assert first == second  # same bundle + same query → same ranking, always
     results = first["results"]
     assert results, "expected lexical hits"
-    assert all(set(r) == {"path", "kind", "title", "snippet", "score"} for r in results)
+    assert all(
+        set(r) == {"path", "kind", "title", "description", "snippet", "score"} for r in results
+    )
     assert all(len(str(r["snippet"])) < 400 for r in results)  # snippets, never bodies
 
 
