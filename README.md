@@ -13,7 +13,8 @@ oknoll project init handbook && cd handbook
 oknoll source add ./docs                 # plus websites and GitHub repos
 oknoll project build                     # compile sources → published revision rev-…
 oknoll query ask "How are credentials stored?"  # cited answer — or an honest "not in this bundle"
-oknoll mcp stdio                         # same bundle, as read-only tools for any agent
+oknoll bundle install ./bundle --name handbook  # into the local content store, pinned by digest
+oknoll daemon start && oknoll ui open    # every installed bundle: web UI + HTTP + MCP, one endpoint
 ```
 
 ## Why not just point the agent at my files (or a vector DB)?
@@ -70,6 +71,9 @@ Or from PyPI (v0.3.0 onward), into an isolated tool environment:
 ```sh
 uv tool install oknoll     # or: pipx install oknoll
 ```
+
+macOS and Linux are the supported platforms for v0.4; Windows is not targeted
+yet (nothing is deliberately incompatible — it is simply untested).
 
 To hack on it instead, run it out of a clone with [`uv`](https://docs.astral.sh/uv/):
 
@@ -191,7 +195,48 @@ oknoll image save handbook:1.0 -o handbook.tar         # OCI image layout, air-g
 oknoll image load handbook.tar                         # digest-verified on the way in
 ```
 
-### Serve a bundle to an agent over MCP
+### Run the local daemon: one endpoint for UI, HTTP API, and MCP
+
+`oknoll daemon start` runs one persistent loopback process that serves every
+installed bundle over a single origin (default `http://127.0.0.1:7465`):
+
+- `/` — a minimal web UI: catalog, bundle overview, search, document viewer,
+  ask box;
+- `/api/v1` — HTTP/JSON: the catalog, the seven explorer tools per bundle,
+  and `ask` with revision-pinned sessions;
+- `/mcp` — MCP Streamable HTTP: the same seven tools for *every* installed
+  bundle (each call names its bundle) plus `bundles_list`/`bundles_get`.
+
+The daemon binds loopback only. `/api` and `/mcp` require a random bearer
+token (created `0600` in the state directory on first start); browser origins
+are validated against a loopback allowlist; client-visible errors never
+contain host paths. Sessions pin content — repointing an alias with
+`bundle install --update` never moves a session that is already running.
+
+```sh
+oknoll daemon start            # detached; --foreground to stay attached
+oknoll daemon status           # health, endpoint, bundle count (--json for scripts)
+oknoll ui open                 # browser UI (token travels in the URL fragment)
+oknoll daemon logs             # tail the daemon log
+oknoll daemon stop
+```
+
+#### Configure an agent once, explore every bundle
+
+```sh
+oknoll mcp endpoint                          # http://127.0.0.1:7465/mcp
+oknoll mcp config --client claude            # print the client config
+oknoll mcp config --client claude --install  # register it via the `claude` CLI
+oknoll mcp config --client codex             # ~/.codex/config.toml snippet
+oknoll mcp inspect                           # tool surface + served bundles
+```
+
+Installing or removing bundles never changes the agent config: the endpoint
+and tool surface are static, discovery happens through `bundles_list`, and
+every result carries the immutable identity (`alias@sha256:…`), so citations
+are fully qualified across bundles.
+
+### Serve a bundle to an agent over MCP (stdio fallback)
 
 `oknoll mcp stdio` exposes the bundle to any [MCP](https://modelcontextprotocol.io)
 client as a read-only stdio server. It offers exactly the seven deterministic explorer
@@ -206,6 +251,7 @@ revision store — someone else's, or an unpacked archive — are served from th
 ```sh
 oknoll mcp stdio                         # serves the active project's bundle
 oknoll mcp stdio /path/to/any/bundle     # or any bundle, incl. someone else's
+oknoll mcp stdio handbook                # or an installed alias (local:handbook)
 ```
 
 It speaks JSON-RPC on stdout and prints status to stderr, so it is driven by an MCP
@@ -294,6 +340,14 @@ never packed) and resume by id:
 oknoll query chat              # ask, ask again; `exit` to quit
 oknoll query chat --mode rag   # vector baseline instead of progressive disclosure
 oknoll query chat --resume chat-20260807-….   # continue where you left off
+```
+
+With installed aliases, chat runs against the daemon instead — one
+revision-pinned session per bundle, `@alias` to address another bundle
+mid-conversation, answers stamped with the pinned identity:
+
+```sh
+oknoll query chat --bundle handbook --bundle acme   # needs `oknoll daemon start`
 ```
 
 `oknoll system plugins list|inspect|validate` reports the installed connectors and checks them

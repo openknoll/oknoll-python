@@ -30,7 +30,7 @@ from oknoll_runtime.locator import Locator, LocatorError, parse_locator, parse_m
 from oknoll_runtime.store import Store, StoreError, digest_hex, format_digest, sha256_digest
 from oknoll_runtime.toolkit import TOOL_NAMES, BundleToolkit, ToolkitError
 
-__version__ = "0.3.3"
+__version__ = "0.4.0"
 
 __all__ = [
     "TOOL_NAMES",
