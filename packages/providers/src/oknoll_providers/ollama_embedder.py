@@ -23,6 +23,12 @@ from oknoll_providers.ollama_provider import DEFAULT_OLLAMA_HOST, _display_host,
 
 _DEFAULT_TIMEOUT_SECONDS = 300.0
 
+# Ollama's embedding runner crashes on very large `input` arrays (the server
+# reports the runner dying as HTTP 400 "tokenize: EOF"), so requests are
+# capped well below the observed failure threshold. Per-text embeddings are
+# independent, so splitting a call never changes the vectors.
+_MAX_BATCH_TEXTS = 256
+
 
 def _l2_normalize(vector: list[float]) -> list[float]:
     norm = math.sqrt(sum(component * component for component in vector))
@@ -48,8 +54,12 @@ class OllamaEmbedder:
         self._client = httpx.Client(transport=transport, timeout=timeout)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        if not texts:
-            return []
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), _MAX_BATCH_TEXTS):
+            vectors.extend(self._embed_batch(texts[start : start + _MAX_BATCH_TEXTS]))
+        return vectors
+
+    def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         try:
             response = self._client.post(
                 f"{self._host}/api/embed", json={"model": self._model, "input": texts}

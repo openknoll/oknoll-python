@@ -55,6 +55,24 @@ def test_count_mismatch_is_a_provider_error() -> None:
         embedder.embed(["alpha", "beta"])
 
 
+def test_large_inputs_are_split_into_bounded_batches() -> None:
+    """One huge `input` array crashes Ollama's runner — requests stay capped."""
+    batches: list[list[str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        texts = json.loads(request.content)["input"]
+        batches.append(texts)
+        return httpx.Response(200, json={"embeddings": [[float(t)] for t in texts]})
+
+    embedder = OllamaEmbedder("m", transport=httpx.MockTransport(handler))
+    vectors = embedder.embed([str(i) for i in range(600)])
+
+    assert [len(batch) for batch in batches] == [256, 256, 88]
+    assert len(vectors) == 600
+    # Order is preserved across batch boundaries (vectors are L2-normalized).
+    assert vectors[0] == [0.0] and vectors[255] == [1.0] and vectors[599] == [1.0]
+
+
 def test_resolve_embedder_spec_grammar() -> None:
     assert resolve_embedder("stub").id == "stub"
     assert resolve_embedder("ollama:nomic-embed-text").id == "ollama:nomic-embed-text"
