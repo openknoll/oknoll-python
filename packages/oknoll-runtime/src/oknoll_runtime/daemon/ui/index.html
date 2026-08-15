@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenKnoll</title>
+<style>
+  :root { --ink: #1c2330; --dim: #66707f; --line: #e3e7ee; --bg: #f7f8fa; --accent: #2757d6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 10px 18px; background: #fff; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; }
+  header .sub { color: var(--dim); font-size: 13px; }
+  main { display: grid; grid-template-columns: 260px 1fr; gap: 0; min-height: calc(100vh - 46px); }
+  #catalog { border-right: 1px solid var(--line); background: #fff; padding: 12px; }
+  #catalog h2, section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 6px 0; }
+  #bundles { list-style: none; margin: 0; padding: 0; }
+  #bundles li { padding: 7px 9px; border-radius: 6px; cursor: pointer; }
+  #bundles li:hover { background: var(--bg); }
+  #bundles li.active { background: #e8eefc; }
+  #bundles .title { font-weight: 600; display: block; }
+  #bundles .id { font-size: 11px; color: var(--dim); word-break: break-all; }
+  #panel { padding: 16px 22px; max-width: 900px; }
+  section { margin-bottom: 22px; }
+  .identity { font-family: ui-monospace, monospace; font-size: 12px; color: var(--dim); word-break: break-all; }
+  input[type=text], input[type=password] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; }
+  button { padding: 8px 14px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  ul.results { list-style: none; padding: 0; margin: 8px 0; }
+  ul.results li { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; background: #fff; cursor: pointer; }
+  ul.results .path { font-family: ui-monospace, monospace; font-size: 12px; color: var(--accent); }
+  ul.results .snippet { font-size: 13px; color: var(--dim); }
+  pre#doc { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 14px; white-space: pre-wrap; word-break: break-word; font-size: 13px; max-height: 55vh; overflow: auto; }
+  #answer { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+  #citations { font-size: 13px; }
+  #citations li { font-family: ui-monospace, monospace; word-break: break-all; }
+  .warn { color: #9a6700; font-size: 13px; }
+  .error { color: #b3261e; font-size: 13px; }
+  #auth { max-width: 460px; margin: 60px auto; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
+  .hidden { display: none !important; }
+  .muted { color: var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>OpenKnoll</h1>
+  <span class="sub">local knowledge runtime — read-only view of your installed bundles</span>
+</header>
+
+<div id="auth" class="hidden">
+  <h2>Authenticate</h2>
+  <p class="muted">This daemon requires its bearer token. Run <code>oknoll ui open</code>
+  to open the UI with the token attached, or paste the token from
+  <code>oknoll mcp endpoint --show-token</code>.</p>
+  <div class="row">
+    <input id="token-input" type="password" placeholder="daemon token" autocomplete="off">
+    <button id="token-save">Connect</button>
+  </div>
+  <p id="auth-error" class="error hidden">That token was refused.</p>
+</div>
+
+<main id="app" class="hidden">
+  <nav id="catalog">
+    <h2>Installed bundles</h2>
+    <ul id="bundles"></ul>
+  </nav>
+  <div id="panel">
+    <section id="overview-section" class="hidden">
+      <h2>Overview</h2>
+      <div id="overview-title" style="font-size:18px;font-weight:650"></div>
+      <div id="overview-desc" class="muted"></div>
+      <div id="overview-id" class="identity"></div>
+      <div id="overview-counts" class="muted" style="font-size:13px"></div>
+    </section>
+    <section id="search-section" class="hidden">
+      <h2>Search</h2>
+      <div class="row">
+        <input id="search-input" type="text" placeholder="search this bundle">
+        <button id="search-go">Search</button>
+      </div>
+      <ul id="search-results" class="results"></ul>
+    </section>
+    <section id="doc-section" class="hidden">
+      <h2>Document</h2>
+      <div id="doc-path" class="identity"></div>
+      <pre id="doc"></pre>
+    </section>
+    <section id="ask-section" class="hidden">
+      <h2>Ask</h2>
+      <div class="row">
+        <input id="ask-input" type="text" placeholder="ask a question with cited evidence">
+        <button id="ask-go">Ask</button>
+      </div>
+      <div id="ask-out" class="hidden">
+        <div id="answer"></div>
+        <ul id="citations"></ul>
+        <div id="ask-warnings" class="warn"></div>
+      </div>
+      <div id="ask-error" class="error hidden"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+// Bundle text is untrusted data: everything from the API lands in the page
+// via textContent only — never innerHTML, never as markup.
+(function () {
+  var token = null;
+  var current = null; // selected alias
+
+  function $(id) { return document.getElementById(id); }
+
+  function api(path, options) {
+    options = options || {};
+    options.headers = Object.assign(
+      { "Authorization": "Bearer " + token }, options.headers || {});
+    return fetch("/api/v1" + path, options).then(function (res) {
+      if (res.status === 401) { showAuth(true); throw new Error("unauthorized"); }
+      return res.json().then(function (body) {
+        if (!res.ok) { throw new Error(body && body.message || ("HTTP " + res.status)); }
+        return body;
+      });
+    });
+  }
+
+  function showAuth(refused) {
+    $("app").classList.add("hidden");
+    $("auth").classList.remove("hidden");
+    $("auth-error").classList.toggle("hidden", !refused);
+  }
+
+  function boot() {
+    var fromHash = null;
+    if (location.hash.indexOf("#token=") === 0) {
+      fromHash = decodeURIComponent(location.hash.slice(7));
+      history.replaceState(null, "", location.pathname); // keep it out of the URL
+    }
+    token = fromHash || sessionStorage.getItem("oknoll-token");
+    if (fromHash) { sessionStorage.setItem("oknoll-token", fromHash); }
+    if (!token) { showAuth(false); return; }
+    loadCatalog();
+  }
+
+  function loadCatalog() {
+    api("/catalog").then(function (body) {
+      $("auth").classList.add("hidden");
+      $("app").classList.remove("hidden");
+      var list = $("bundles");
+      list.textContent = "";
+      body.bundles.forEach(function (b) {
+        var li = document.createElement("li");
+        var title = document.createElement("span");
+        title.className = "title";
+        title.textContent = b.title || b.alias;
+        var id = document.createElement("span");
+        id.className = "id";
+        id.textContent = b.bundle;
+        li.appendChild(title);
+        li.appendChild(id);
+        li.addEventListener("click", function () { select(b.alias, li); });
+        list.appendChild(li);
+      });
+      if (!body.bundles.length) {
+        var empty = document.createElement("li");
+        empty.textContent = "nothing installed — try `oknoll bundle install`";
+        empty.className = "muted";
+        list.appendChild(empty);
+      }
+    }).catch(function () {});
+  }
+
+  function select(alias, li) {
+    current = alias;
+    Array.prototype.forEach.call($("bundles").children, function (el) {
+      el.classList.toggle("active", el === li);
+    });
+    ["overview-section", "search-section", "ask-section"].forEach(function (id) {
+      $(id).classList.remove("hidden");
+    });
+    $("doc-section").classList.add("hidden");
+    $("search-results").textContent = "";
+    $("ask-out").classList.add("hidden");
+    $("ask-error").classList.add("hidden");
+    api("/bundles/" + encodeURIComponent(alias) + "/overview").then(function (o) {
+      $("overview-title").textContent = o.title || alias;
+      $("overview-desc").textContent = o.description || "";
+      $("overview-id").textContent = o.bundle + " (" + o.okf_revision + ")";
+      var counts = [];
+      if (o.counts) {
+        counts.push(o.counts.concepts + " concepts", o.counts.references + " references");
+      }
+      $("overview-counts").textContent = counts.join(" · ");
+    }).catch(function (err) {
+      $("overview-title").textContent = alias;
+      $("overview-desc").textContent = String(err.message || err);
+    });
+  }
+
+  function runSearch() {
+    if (!current) { return; }
+    var q = $("search-input").value.trim();
+    if (!q) { return; }
+    api("/bundles/" + encodeURIComponent(current) + "/search?query=" + encodeURIComponent(q))
+      .then(function (body) {
+        var list = $("search-results");
+        list.textContent = "";
+        (body.results || []).forEach(function (r) {
+          var li = document.createElement("li");
+          var path = document.createElement("div");
+          path.className = "path";
+          path.textContent = r.path;
+          var snippet = document.createElement("div");
+          snippet.className = "snippet";
+          snippet.textContent = r.snippet || "";
+          li.appendChild(path);
+          li.appendChild(snippet);
+          li.addEventListener("click", function () { openDoc(r.path); });
+          list.appendChild(li);
+        });
+        if (!(body.results || []).length) {
+          var empty = document.createElement("li");
+          empty.textContent = "no matches";
+          empty.className = "muted";
+          list.appendChild(empty);
+        }
+      }).catch(function () {});
+  }
+
+  function openDoc(path) {
+    api("/bundles/" + encodeURIComponent(current) + "/read?path=" + encodeURIComponent(path))
+      .then(function (body) {
+        $("doc-section").classList.remove("hidden");
+        $("doc-path").textContent = body.bundle + "/" + path.replace(/^\//, "");
+        $("doc").textContent = body.body || "";
+      }).catch(function () {});
+  }
+
+  function runAsk() {
+    if (!current) { return; }
+    var q = $("ask-input").value.trim();
+    if (!q) { return; }
+    $("ask-go").disabled = true;
+    $("ask-error").classList.add("hidden");
+    api("/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bundle: current, question: q })
+    }).then(function (body) {
+      $("ask-out").classList.remove("hidden");
+      $("answer").textContent = body.answer;
+      var cites = $("citations");
+      cites.textContent = "";
+      (body.citations || []).forEach(function (c) {
+        var li = document.createElement("li");
+        li.textContent = c.qualified || c.path;
+        cites.appendChild(li);
+      });
+      $("ask-warnings").textContent = (body.warnings || []).join(" · ");
+    }).catch(function (err) {
+      $("ask-error").textContent = String(err.message || err);
+      $("ask-error").classList.remove("hidden");
+    }).finally(function () { $("ask-go").disabled = false; });
+  }
+
+  $("token-save").addEventListener("click", function () {
+    var value = $("token-input").value.trim();
+    if (!value) { return; }
+    token = value;
+    sessionStorage.setItem("oknoll-token", value);
+    loadCatalog();
+  });
+  $("search-go").addEventListener("click", runSearch);
+  $("search-input").addEventListener("keydown", function (e) { if (e.key === "Enter") { runSearch(); } });
+  $("ask-go").addEventListener("click", runAsk);
+  $("ask-input").addEventListener("keydown", function (e) { if (e.key === "Enter") { runAsk(); } });
+
+  boot();
+})();
+</script>
+</body>
+</html>

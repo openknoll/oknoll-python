@@ -2,12 +2,15 @@ name: Release
 
 # Tag-driven PyPI release. Flow: run scripts/bump_version.py, commit, promote
 # develop → main by PR, then `git tag v<version> && git push origin v<version>`.
-# Publishing uses PyPI trusted publishing (OIDC). Each of the five projects is
+# Publishing uses PyPI trusted publishing (OIDC). Each of the six projects is
 # registered on PyPI with this repo, this workflow file, and its own GitHub
 # environment `pypi-<dist>` — per-package environments because PyPI requires
 # *pending* trusted publishers (projects that don't exist yet) to have unique
 # configurations; a shared environment would collide. The environments are
 # auto-created by the first run; no repo-side setup or secrets needed.
+# New in v0.4.0: `oknoll-runtime` — its PyPI pending publisher must exist
+# before the first v0.4.0 tag (same repo/workflow, environment
+# pypi-oknoll-runtime).
 
 on:
   push:
@@ -75,6 +78,7 @@ jobs:
           - { dist: oknoll-connectors, dist_prefix: oknoll_connectors }
           - { dist: oknoll-providers, dist_prefix: oknoll_providers }
           - { dist: oknoll-eval, dist_prefix: oknoll_eval }
+          - { dist: oknoll-runtime, dist_prefix: oknoll_runtime }
           - { dist: oknoll, dist_prefix: oknoll }
     environment: "pypi-${{ matrix.dist }}"
     permissions:

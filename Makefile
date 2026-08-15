@@ -23,7 +23,8 @@ security:
 		packages/connectors/tests/test_ssrf_corpus.py \
 		packages/okf-core/tests/test_prompt_injection_corpus.py \
 		packages/okf-core/tests/test_injected_sources.py \
-		packages/okf-core/tests/test_extract_corpus.py -v
+		packages/okf-core/tests/test_extract_corpus.py \
+		packages/oknoll-runtime/tests/test_daemon_security.py -v
 
 build:
 	uv build --all-packages
