@@ -18,6 +18,12 @@ from okf_core.canonical import (
     sha256_hex,
 )
 from okf_core.explorer import Explorer, ExplorerError
+from okf_core.extract import (
+    ExtractError,
+    ExtractLimits,
+    ExtractResult,
+    safe_extract_bundle,
+)
 from okf_core.findings import Finding, Level, LintReport, Severity
 from okf_core.frontmatter import (
     KNOWN_KEY_ORDER,
@@ -82,6 +88,9 @@ __all__ = [
     "EmbeddingProvider",
     "Explorer",
     "ExplorerError",
+    "ExtractError",
+    "ExtractLimits",
+    "ExtractResult",
     "Finding",
     "Frontmatter",
     "FrontmatterError",
@@ -120,6 +129,7 @@ __all__ = [
     "resolve_embedder",
     "resolve_provider",
     "revision_dir",
+    "safe_extract_bundle",
     "search_index",
     "sha256_hex",
     "strip_okf_fields",

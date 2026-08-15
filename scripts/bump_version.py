@@ -7,7 +7,7 @@ Rewrites, for every distributable package:
 - `version = "..."` in its pyproject.toml
 - sibling workspace dependencies to exact pins (`okf-core==0.3.0`) — in dev the
   uv workspace source still wins, so the pins only bite on a PyPI install,
-  where they keep a release's five packages moving together
+  where they keep a release's six packages moving together
 - the informational `__version__` strings in the package sources
 
 The release workflow refuses to publish when the tag and these versions
@@ -27,16 +27,25 @@ PACKAGE_DIRS = [
     REPO / "packages" / "connectors",
     REPO / "packages" / "providers",
     REPO / "packages" / "eval",
+    REPO / "packages" / "oknoll-runtime",
     REPO / "packages" / "oknoll-cli",
 ]
 
-SIBLING_DISTS = ["okf-core", "oknoll-connectors", "oknoll-providers", "oknoll-eval", "oknoll"]
+SIBLING_DISTS = [
+    "okf-core",
+    "oknoll-connectors",
+    "oknoll-providers",
+    "oknoll-eval",
+    "oknoll-runtime",
+    "oknoll",
+]
 
 VERSION_FILES = [
     REPO / "packages" / "okf-core" / "src" / "okf_core" / "_version.py",
     REPO / "packages" / "connectors" / "src" / "oknoll_connectors" / "__init__.py",
     REPO / "packages" / "providers" / "src" / "oknoll_providers" / "__init__.py",
     REPO / "packages" / "eval" / "src" / "oknoll_eval" / "__init__.py",
+    REPO / "packages" / "oknoll-runtime" / "src" / "oknoll_runtime" / "__init__.py",
     REPO / "packages" / "oknoll-cli" / "src" / "oknoll_cli" / "__init__.py",
 ]
 

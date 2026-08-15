@@ -14,6 +14,7 @@ members = [
     "packages/connectors",
     "packages/providers",
     "packages/eval",
+    "packages/oknoll-runtime",
 ]
 
 [tool.uv.sources]
@@ -22,6 +23,7 @@ oknoll = { workspace = true }
 oknoll-connectors = { workspace = true }
 oknoll-providers = { workspace = true }
 oknoll-eval = { workspace = true }
+oknoll-runtime = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -53,6 +55,7 @@ mypy_path = [
     "packages/connectors/src",
     "packages/providers/src",
     "packages/eval/src",
+    "packages/oknoll-runtime/src",
 ]
 
 [[tool.mypy.overrides]]
@@ -66,5 +69,6 @@ testpaths = [
     "packages/connectors/tests",
     "packages/providers/tests",
     "packages/eval/tests",
+    "packages/oknoll-runtime/tests",
 ]
 addopts = "-q"

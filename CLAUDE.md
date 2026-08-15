@@ -60,6 +60,14 @@ behavior.
 - `packages/oknoll-cli` — Typer CLI over okf-core (`oknoll_cli/commands/` holds one
   module per namespace); includes the stdio MCP server (`oknoll mcp stdio`), chat,
   plugin surface.
+- `packages/oknoll-runtime` — local runtime: content-addressed store
+  (blobs/manifests/immutable trees), deterministic OkNoll OCI image
+  build/save/load, sqlite catalog (aliases + image tags), the bundle locator
+  parser (contract: `spec/locator-grammar.md` + `fixtures/locators/vectors.json`,
+  passed verbatim), platformdirs data/cache/state dirs (`OKNOLL_HOME` nests all
+  three). Archive ingestion always goes through okf-core's
+  `safe_extract_bundle` (its malicious-archive corpus in
+  `fixtures/security/archives/` is a `make security` release gate).
 - `packages/connectors` — files/web/github connectors + `SafeFetcher` + the shared
   `ConnectorContractSuite` every connector must pass.
 - `packages/providers` — real model/embedding providers (Anthropic, Ollama); spec grammar
@@ -73,9 +81,9 @@ behavior.
 - Python 3.12+ (`uv` workspace, `ruff`, `mypy --strict`, `pytest`, Typer).
 - `Makefile` targets `install/lint/typecheck/test/security/build/smoke` are the single
   entrypoint — CI reuses them.
-- `make security` runs the release-gate corpora (SSRF + prompt-injection + injected-sources);
-  a failure stops a release.
-- Releases are tag-driven (`release.yml`): all five packages share one version,
+- `make security` runs the release-gate corpora (SSRF + prompt-injection +
+  injected-sources + malicious archives); a failure stops a release.
+- Releases are tag-driven (`release.yml`): all six packages share one version,
   moved in lockstep by `scripts/bump_version.py <version>` (pyprojects, exact
   sibling pins, `__version__` strings) + `make install` to refresh `uv.lock`;
   the workflow refuses a tag that disagrees with the pyproject versions, then

@@ -71,7 +71,7 @@ def test_full_local_flow(project: Path) -> None:
 
     pack = runner.invoke(app, ["bundle", "pack"])
     assert pack.exit_code == 0, _output(pack)
-    archive = project / "dist" / f"handbook-{current}.tar.gz"
+    archive = project / "dist" / f"handbook-{current}.okf.tgz"
     assert archive.is_file()
     assert archive.with_name(archive.name + ".sha256").is_file()
 
@@ -82,7 +82,7 @@ def test_full_local_flow(project: Path) -> None:
 
     plain = runner.invoke(app, ["bundle", "pack", "--profile", "plain"])
     assert plain.exit_code == 0, _output(plain)
-    plain_archive = project / "dist" / f"handbook-{current}-plain.tar.gz"
+    plain_archive = project / "dist" / f"handbook-{current}-plain.okf.tgz"
     with tarfile.open(plain_archive, mode="r:gz") as tar:
         names = tar.getnames()
     assert all(".oknoll" not in name for name in names)

@@ -21,7 +21,9 @@ test:
 security:
 	uv run --no-sync pytest \
 		packages/connectors/tests/test_ssrf_corpus.py \
-		packages/okf-core/tests/test_prompt_injection_corpus.py -v
+		packages/okf-core/tests/test_prompt_injection_corpus.py \
+		packages/okf-core/tests/test_injected_sources.py \
+		packages/okf-core/tests/test_extract_corpus.py -v
 
 build:
 	uv build --all-packages

@@ -133,10 +133,13 @@ def test_legacy_commands_are_pointer_only(old: str) -> None:
 
 
 def test_not_yet_commands_fail_clearly() -> None:
+    # Phase 16 wired the local store surface (bundle install/…, image build/…);
+    # what remains stubbed is the registry client, daemon, and hosted surface.
     for args in (
         ["auth", "login"],
-        ["bundle", "install", "some.okf.tgz", "--name", "x"],
-        ["image", "build", "./bundle"],
+        ["bundle", "connect", "oknoll://openknoll.com/acme/handbook", "--as", "x"],
+        ["image", "push", "ref"],
+        ["image", "pull", "ref"],
         ["daemon", "start"],
         ["ui", "open"],
         ["registry", "inspect", "ref"],
@@ -145,6 +148,15 @@ def test_not_yet_commands_fail_clearly() -> None:
         result = runner.invoke(app, args)
         assert result.exit_code == 2, f"{args}: {result.exit_code}"
         assert "not implemented yet" in _output(result), args
+
+
+def test_remote_locators_point_at_the_registry_client() -> None:
+    """Remote installs parse but land on the not-yet registry surface."""
+    result = runner.invoke(
+        app, ["bundle", "install", "oci://ghcr.io/acme/handbook:1.0", "--name", "handbook"]
+    )
+    assert result.exit_code == 2
+    assert "not implemented yet" in _output(result)
 
 
 def test_mcp_stdio_without_project_fails_cleanly(

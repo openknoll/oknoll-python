@@ -165,8 +165,30 @@ oknoll query ask "What is the Zanzibar revenue forecast?"
 oknoll query ask "…" --json    # answer + citations + warnings + full trace, machine-readable
 
 # 7. Pack a deterministic, checksummed archive for sharing.
-oknoll bundle pack             # dist/Team Handbook-rev-….tar.gz  + .sha256
+oknoll bundle pack             # dist/<name>-rev-….okf.tgz  + .sha256
 oknoll bundle pack --profile plain   # same tree with OKF-only frontmatter keys stripped
+```
+
+### Install existing bundles into the local store
+
+Any OKF bundle — yours or someone else's, a directory or a packed archive —
+installs into a machine-level content-addressed store under a catalog alias.
+Archives are ingested through a hardened extraction path (no traversal,
+links, or device nodes; size/count limits; atomic publish), the bundle's own
+manifest checksums are verified, and the installed tree is immutable and
+pinned by both its OCI image digest and its OKF revision id.
+
+```sh
+oknoll bundle install ./handbook --name handbook       # or handbook.okf.tgz
+oknoll bundle list                                     # alias, revision, digest, title
+oknoll query ask local:handbook "How are incidents escalated?"   # cited, offline
+oknoll bundle checkout local:handbook ./handbook-copy  # editable working tree
+oknoll bundle unpack vendor.okf.tgz ./vendor           # safe extract, nothing registered
+
+# Bundles travel as OCI artifacts (an image *contains* a bundle, never replaces it):
+oknoll image build ./handbook --tag handbook:1.0
+oknoll image save handbook:1.0 -o handbook.tar         # OCI image layout, air-gap friendly
+oknoll image load handbook.tar                         # digest-verified on the way in
 ```
 
 ### Serve a bundle to an agent over MCP
@@ -361,6 +383,7 @@ produced by others.
 |---|---|
 | `packages/okf-core` | CanonicalDoc, OKF v0.2 parser/writer, five-level lint, pipeline, indexes, packer |
 | `packages/oknoll-cli` | `oknoll` Typer CLI (resource-namespaced command surface) |
+| `packages/oknoll-runtime` | local runtime: content-addressed store, OkNoll OCI images, catalog, locator grammar |
 | `packages/connectors` | files/web/github/transcript connectors + plugin SDK |
 | `packages/eval` | PD-vs-RAG evaluation harness |
 | `fixtures/` | golden bundles and malformed cases |
@@ -382,7 +405,7 @@ uv run oknoll --help
 
 Branches: feature branches off `develop`; `main` is promotion-only.
 
-Releasing (all five packages move in lockstep with the tag):
+Releasing (all six packages move in lockstep with the tag):
 
 ```sh
 uv run python scripts/bump_version.py 0.4.0   # pyprojects, sibling pins, __version__

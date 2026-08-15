@@ -27,8 +27,12 @@ echo "$legacy_out" | grep -q "moved: use 'oknoll project build'"
 # Files → build → deterministic archive, reproducible via bundle diff --check;
 # then ask over the built revision, with citations and a written trace.
 workdir="$(mktemp -d)"
-trap 'rm -rf "$workdir"' EXIT
+# Store trees are published write-protected; unprotect before removing.
+trap 'chmod -R u+w "$workdir" 2>/dev/null || true; rm -rf "$workdir"' EXIT
 repo="$(pwd)"
+# Hermetic: config, secrets, and the runtime store/catalog all live under the
+# temp dir — the smoke never reads ~/.oknoll or writes the real content store.
+export OKNOLL_HOME="$workdir/home"
 uv run --no-sync oknoll project init "$workdir/proj" --name smoke >/dev/null
 cp -R "$repo/fixtures/sources/handbook" "$workdir/proj/sources/handbook"
 (
@@ -60,6 +64,30 @@ cp -R "$repo/fixtures/sources/handbook" "$workdir/proj/sources/handbook"
   uv run --no-sync --project "$repo" oknoll system plugins list | grep -q files
   uv run --no-sync --project "$repo" oknoll system plugins validate github | grep -q conforms
 )
+
+# Phase 16 store surface: two bundles installed (golden + foreign) → catalog →
+# cited answer over local:, checkout, image save/load round trip, and the
+# safe-extraction gate rejecting a malicious archive.
+uv run --no-sync oknoll bundle install fixtures/bundles/golden/multihop --name handbook >/dev/null
+uv run --no-sync oknoll bundle install fixtures/bundles/upstream/acme_retail --name acme >/dev/null
+uv run --no-sync oknoll bundle list | grep -q handbook
+uv run --no-sync oknoll bundle list | grep -q acme
+localask="$(uv run --no-sync oknoll query ask local:handbook \
+  "Who must sign off a production release?" --json)"
+echo "$localask" | grep -q '"abstained": false'
+echo "$localask" | grep -q '"bundle": "handbook@sha256:'
+uv run --no-sync oknoll bundle checkout local:handbook "$workdir/checkout" >/dev/null
+uv run --no-sync oknoll image build fixtures/bundles/golden/minimal --tag minimal:1.0 >/dev/null
+uv run --no-sync oknoll image save minimal:1.0 -o "$workdir/minimal.tar" >/dev/null
+uv run --no-sync oknoll image load "$workdir/minimal.tar" >/dev/null
+# Capture first — the deliberate exit 1 would otherwise stop the script.
+unpack_rc=0
+uv run --no-sync oknoll bundle unpack fixtures/security/archives/traversal.tar \
+  "$workdir/evil" 2>/dev/null || unpack_rc=$?
+if [[ "$unpack_rc" -ne 1 || -e "$workdir/evil" ]]; then
+  echo "smoke: malicious archive should have been rejected (got $unpack_rc)" >&2
+  exit 1
+fi
 
 # The local stdio MCP server answers the real protocol over a spawned
 # subprocess — list the seven tools and call one, no model involved.

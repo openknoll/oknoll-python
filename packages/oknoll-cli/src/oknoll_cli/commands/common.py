@@ -24,6 +24,7 @@ from oknoll_connectors import FetchPolicy, FilesConnector, GitHubConnector, WebC
 from oknoll_providers import ProviderError, load_env
 from oknoll_providers import resolve as resolve_provider_spec
 from oknoll_providers import resolve_embedder as resolve_embedder_spec
+from oknoll_runtime import Catalog, CatalogEntry, LocatorError, Store, parse_locator, runtime_dirs
 
 from oknoll_cli import global_config, project
 
@@ -98,6 +99,37 @@ def pipeline_sources(config: project.ProjectConfig) -> list[PipelineSource]:
     return sources
 
 
+def runtime_store_catalog() -> tuple[Store, Catalog]:
+    """The machine-level content store and catalog (data dir per platformdirs)."""
+    dirs = runtime_dirs()
+    return Store(dirs.data), Catalog(dirs.data)
+
+
+def parse_cli_locator(text: str) -> Any:
+    """Parse a locator typed by the user; parse errors are user errors (exit 2)."""
+    try:
+        return parse_locator(text)
+    except LocatorError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2) from exc
+
+
+def resolve_installed(catalog: Catalog, target: str) -> CatalogEntry:
+    """Resolve a bare name or ``local:`` locator to an installed catalog entry."""
+    locator = parse_cli_locator(target)
+    if locator.kind not in ("bare", "local"):
+        raise fail(f"{target!r} does not name an installed bundle (expected local:<alias>)")
+    alias = locator.name or ""
+    entry = catalog.get(alias)
+    if entry is None:
+        raise fail(f"no installed bundle named {alias!r} — see `oknoll bundle list`")
+    return entry
+
+
+def short_digest(digest: str) -> str:
+    return digest[:19] + "…" if len(digest) > 20 else digest
+
+
 def display_path(path: Path, root: Path) -> str:
     """Project-relative when it is inside the project, absolute otherwise."""
     try:
@@ -123,6 +155,28 @@ def provider_for(config: project.ProjectConfig, override: str | None = None) -> 
 
 def embedder_for(config: project.ProjectConfig, override: str | None = None) -> EmbeddingProvider:
     spec = override or config.embedder or global_defaults().embedder or "stub"
+    try:
+        return resolve_embedder_spec(spec)
+    except (ValueError, ProviderError) as exc:
+        raise fail(str(exc)) from exc
+
+
+def provider_without_project(override: str | None = None) -> ModelProvider:
+    """Provider resolution for locator-based asks — no project config involved."""
+    try:
+        load_env(Path.cwd())
+        global_config.apply_global_env()
+    except (ProviderError, global_config.GlobalConfigError) as exc:
+        raise fail(str(exc)) from exc
+    spec = override or global_defaults().model or "stub"
+    try:
+        return resolve_provider_spec(spec)
+    except (ValueError, ProviderError) as exc:
+        raise fail(str(exc)) from exc
+
+
+def embedder_without_project(override: str | None = None) -> EmbeddingProvider:
+    spec = override or global_defaults().embedder or "stub"
     try:
         return resolve_embedder_spec(spec)
     except (ValueError, ProviderError) as exc:
