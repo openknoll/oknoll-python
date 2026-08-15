@@ -1,0 +1,20 @@
+{
+  "absolute-path.tar": "absolute_path",
+  "backslash-path.tar": "unsafe_path",
+  "device-node.tar": "device_member",
+  "dir-file-collision.tar": "duplicate_member",
+  "dirs-only.tar": "empty_archive",
+  "duplicate-entry.tar": "duplicate_member",
+  "empty.tar": "empty_archive",
+  "expansion-bomb.tar.gz": "expanded_too_large",
+  "fifo.tar": "unsupported_member_type",
+  "hardlink-escape.tar": "hardlink_member",
+  "member-flood.tar": "too_many_files",
+  "multi-root.tar": "ambiguous_root",
+  "no-root-marker.tar": "ambiguous_root",
+  "not-an-archive.bin": "not_an_archive",
+  "oversized-member.tar.gz": "member_too_large",
+  "symlink-escape.tar": "symlink_member",
+  "symlink-internal.tar": "symlink_member",
+  "traversal.tar": "path_traversal"
+}
