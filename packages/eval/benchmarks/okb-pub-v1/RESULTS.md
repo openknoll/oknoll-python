@@ -38,10 +38,11 @@ this run's traces do not.
 **Concept-type note (2026-08-15):** concept frontmatter `type` was renamed
 `Reference` → `Concept` on develop after this run. Stub rebuilds from the
 README's pins on okf-core > 0.3.3 therefore produce different concept bytes and
-different revision IDs than the table above (handbook `rev-6d9343b3e29b`,
-ripgrep `rev-6a0aa0b63a08`). Questions, gold evidence, and `references/` paths
-are unaffected — the change is cosmetic frontmatter only and does not alter
-retrieval or answers.
+different revision IDs than the table above: handbook `rev-6d9343b3e29b` →
+`rev-426d78496f5a`, ripgrep `rev-6a0aa0b63a08` → `rev-d47e22347f12` (per-concept
+diff: the `type` line plus the `generated.by` version stamp). Questions, gold
+evidence, and `references/` paths are unaffected — the change is cosmetic
+frontmatter only and does not alter retrieval or answers.
 
 ## Summary
 
