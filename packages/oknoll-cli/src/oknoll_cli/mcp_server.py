@@ -1,24 +1,28 @@
-"""`oknoll serve --mcp` — the seven deterministic explorer tools over stdio MCP.
+"""`oknoll mcp stdio` — the seven deterministic explorer tools over stdio MCP.
 
 A read-only local stdio server exposing exactly the seven-tool navigation
-surface. The server is a thin adapter — every guardrail
-(path validation, bounded counts, size caps, snippet-only search) is enforced
-by `okf_core.explorer.Explorer`, the same implementation the CLI and web app
-use; nothing here may weaken them. Bundle text is untrusted data: tool output
-is quoted content, never instructions, and no tool mutates anything.
+surface for one bundle. The server is a thin adapter over
+`oknoll_runtime.toolkit.BundleToolkit` — every guardrail (path validation,
+bounded counts, size caps, snippet-only search) is enforced by
+`okf_core.explorer.Explorer`, and the toolkit adds the shared error
+discipline (client refusals never carry host paths); nothing here may weaken
+either. Bundle text is untrusted data: tool output is quoted content, never
+instructions, and no tool mutates anything.
 
 A server serves one bundle for its lifetime: the explorer binds the bundle's
 file set at first use, so the seven tools stay mutually consistent across the
-session even if the tree is rebuilt underneath them (a newly added file is not
-picked up mid-session). Body content is read live from the materialized tree —
-the explorer navigates the current revision's files, not a byte-frozen
-snapshot, matching `ask`/`chat` semantics.
+session even if the tree is rebuilt underneath them (a newly added file is
+not picked up mid-session). Body content is read live from the materialized
+tree — the explorer navigates the current revision's files, not a
+byte-frozen snapshot, matching `ask`/`chat` semantics.
+
+The multi-bundle daemon endpoint (`oknoll daemon start`) serves the same
+tools for every installed bundle at once; this stdio server remains the
+single-bundle fallback.
 """
 
 from __future__ import annotations
 
-import sqlite3
-import sys
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -32,9 +36,8 @@ from okf_core.explorer import (
     MAX_PEEK_LINES,
     MAX_READ_CHARS,
     MAX_SEARCH_LIMIT,
-    Explorer,
-    ExplorerError,
 )
+from oknoll_runtime.toolkit import BundleToolkit, ToolkitError
 from pydantic import Field
 
 SERVER_NAME = "oknoll"
@@ -53,8 +56,8 @@ _PATH_FIELD = Field(
 def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
     """An MCP server bound to one bundle (revision-pinned for its lifetime)."""
     try:
-        explorer = Explorer(bundle_root, today=today)
-    except ExplorerError as exc:
+        toolkit = BundleToolkit(bundle_root, today=today)
+    except ToolkitError as exc:
         raise ValueError(str(exc)) from exc
 
     server = MCPServer(
@@ -70,22 +73,12 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
         ),
     )
 
-    def _guarded(tool: str, call: Any) -> dict[str, Any]:
-        # ExplorerError is a guardrail refusal (bad path, bad filter, …) whose
-        # message only ever names the caller's own bundle-relative path — safe
-        # to surface as a structured tool error.
+    def _guarded(call: Any) -> dict[str, Any]:
         try:
             result: dict[str, Any] = call()
-        except ExplorerError as exc:
-            raise ToolError(f"{tool}: {exc}") from exc
-        except (ValueError, OSError, sqlite3.Error) as exc:
-            # A file vanished mid-session, unreadable bytes, a corrupt FTS index.
-            # Never echo the exception text to the client: OSError embeds the
-            # absolute host path and internal errors embed internal state, and
-            # the agent is only ever meant to see bundle-relative paths. Log the
-            # detail to stderr (out of the stdio transport) for the operator.
-            print(f"oknoll serve: {tool} failed: {exc!r}", file=sys.stderr)
-            raise ToolError(f"{tool}: cannot serve this request") from exc
+        except ToolkitError as exc:
+            # Toolkit refusals are client-safe by contract.
+            raise ToolError(str(exc)) from exc
         return result
 
     @server.tool(
@@ -98,7 +91,7 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
         annotations=_READ_ONLY,
     )
     def overview() -> dict[str, Any]:
-        return _guarded("overview", explorer.overview)
+        return _guarded(toolkit.overview)
 
     @server.tool(
         name="list",
@@ -123,8 +116,7 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
         ] = 50,
     ) -> dict[str, Any]:
         return _guarded(
-            "list",
-            lambda: explorer.list(directory, type=type, tag=tag, status=status, limit=limit),
+            lambda: toolkit.list(directory, type=type, tag=tag, status=status, limit=limit)
         )
 
     @server.tool(
@@ -141,7 +133,7 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
             int, Field(description=f"Max results (clamped to 1..{MAX_SEARCH_LIMIT}).")
         ] = 10,
     ) -> dict[str, Any]:
-        return _guarded("search", lambda: explorer.search(query, limit=limit))
+        return _guarded(lambda: toolkit.search(query, limit=limit))
 
     @server.tool(
         name="peek",
@@ -157,7 +149,7 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
             int, Field(description=f"Body lines to preview (clamped to 1..{MAX_PEEK_LINES}).")
         ] = 20,
     ) -> dict[str, Any]:
-        return _guarded("peek", lambda: explorer.peek(path, lines=lines))
+        return _guarded(lambda: toolkit.peek(path, lines=lines))
 
     @server.tool(
         name="read",
@@ -173,7 +165,7 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
             int, Field(description=f"Body size cap (clamped to 1..{MAX_READ_CHARS}).")
         ] = MAX_READ_CHARS,
     ) -> dict[str, Any]:
-        return _guarded("read", lambda: explorer.read(path, max_chars=max_chars))
+        return _guarded(lambda: toolkit.read(path, max_chars=max_chars))
 
     @server.tool(
         name="links",
@@ -191,7 +183,7 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
             Field(description=f"Max edges per direction (clamped to 1..{MAX_LINK_EDGES})."),
         ] = 16,
     ) -> dict[str, Any]:
-        return _guarded("links", lambda: explorer.links(path, direction=direction, limit=limit))
+        return _guarded(lambda: toolkit.links(path, direction=direction, limit=limit))
 
     @server.tool(
         name="history",
@@ -201,7 +193,7 @@ def build_server(bundle_root: Path, *, today: str | None = None) -> MCPServer:
     def history(
         limit: Annotated[int, Field(description="Max entries (clamped to 1..100).")] = 20,
     ) -> dict[str, Any]:
-        return _guarded("history", lambda: explorer.history(limit=limit))
+        return _guarded(lambda: toolkit.history(limit=limit))
 
     return server
 

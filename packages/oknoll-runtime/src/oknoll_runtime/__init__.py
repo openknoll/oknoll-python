@@ -28,10 +28,13 @@ from oknoll_runtime.installer import (
 )
 from oknoll_runtime.locator import Locator, LocatorError, parse_locator, parse_machine_locator
 from oknoll_runtime.store import Store, StoreError, digest_hex, format_digest, sha256_digest
+from oknoll_runtime.toolkit import TOOL_NAMES, BundleToolkit, ToolkitError
 
 __version__ = "0.3.3"
 
 __all__ = [
+    "TOOL_NAMES",
+    "BundleToolkit",
     "Catalog",
     "CatalogEntry",
     "CatalogError",
@@ -43,6 +46,7 @@ __all__ = [
     "RuntimeDirs",
     "Store",
     "StoreError",
+    "ToolkitError",
     "__version__",
     "build_image_from_archive",
     "build_image_from_tree",
