@@ -163,12 +163,8 @@ def test_chat_multi_bundle_needs_the_daemon(built_project: Path) -> None:
     assert "daemon is not running" in _output(result)
 
 
-def test_chat_daemon_mode_rejects_mixed_paths(
-    built_project: Path, tmp_path: Path
-) -> None:
-    result = runner.invoke(
-        app, ["query", "chat", "--bundle", "a", "--bundle", str(tmp_path)]
-    )
+def test_chat_daemon_mode_rejects_mixed_paths(built_project: Path, tmp_path: Path) -> None:
+    result = runner.invoke(app, ["query", "chat", "--bundle", "a", "--bundle", str(tmp_path)])
     assert result.exit_code == 1
     assert "aliases only" in _output(result)
 

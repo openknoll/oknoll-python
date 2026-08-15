@@ -10,6 +10,7 @@ cannot tell a wedged process from a serving one.
 
 from __future__ import annotations
 
+import contextlib
 import errno
 import json
 import os
@@ -50,6 +51,13 @@ def daemon_url(record: DaemonRecord) -> str:
 def pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    # When the daemon is our own child (tests, a wrapping process), it stays a
+    # signalable zombie after exit until reaped — reap it so "alive" means
+    # "actually running". waitpid on a non-child raises and changes nothing.
+    with contextlib.suppress(ChildProcessError, OSError):
+        reaped, _status = os.waitpid(pid, os.WNOHANG)
+        if reaped == pid:
+            return False
     try:
         os.kill(pid, 0)
     except OSError as exc:
