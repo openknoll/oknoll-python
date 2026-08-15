@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Instruction override
 description: Bundle text that tries to replace the caller's instructions.
 status: draft

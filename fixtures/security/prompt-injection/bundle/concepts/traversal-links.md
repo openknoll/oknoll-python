@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Traversal links
 description: Bundle links that try to escape the bundle root.
 status: draft

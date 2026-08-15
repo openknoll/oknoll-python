@@ -48,7 +48,7 @@ def test_index_is_keyed_by_revision_id_and_reused(minimal: Path) -> None:
 def test_changed_content_gets_a_new_index_directory(minimal: Path) -> None:
     first = indexing.ensure_index(minimal)
     (minimal / "concepts" / "architecture.md").write_text(
-        "---\ntype: Reference\ntitle: Rewritten\n---\n\n# Rewritten\n\nDifferent words.\n",
+        "---\ntype: Concept\ntitle: Rewritten\n---\n\n# Rewritten\n\nDifferent words.\n",
         encoding="utf-8",
     )
     second = indexing.ensure_index(minimal)
@@ -82,7 +82,7 @@ def test_non_ascii_questions_are_not_silently_dropped(tmp_path: Path) -> None:
         "---\ntitle: Ünicode\n---\n\n# Ü\n\n- [Café](/concepts/cafe.md)\n", encoding="utf-8"
     )
     (bundle / "concepts" / "cafe.md").write_text(
-        "---\ntype: Reference\ntitle: Café\n---\n\n"
+        "---\ntype: Concept\ntitle: Café\n---\n\n"
         "# Café\n\nEspresso naïve résumé — 日本語 テスト.\n",
         encoding="utf-8",
     )
@@ -155,7 +155,7 @@ def test_concurrent_index_builds_agree_and_never_crash(tmp_path: Path) -> None:
     (bundle / "index.md").write_text("---\ntitle: Big\n---\n\n# Big\n", encoding="utf-8")
     for i in range(300):
         (bundle / "concepts" / f"c{i}.md").write_text(
-            f"---\ntype: Reference\ntitle: C{i}\n---\n\n# C{i}\n\nrelease process notes {i}\n",
+            f"---\ntype: Concept\ntitle: C{i}\n---\n\n# C{i}\n\nrelease process notes {i}\n",
             encoding="utf-8",
         )
 

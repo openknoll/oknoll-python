@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Concept with a broken link
 description: Links to a concept that does not exist.
 sources:

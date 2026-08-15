@@ -35,6 +35,14 @@ change to the answer model. Traces are distinguishable: post-change runs carry
 `max_evidence`/`excerpt_chars`/`title_shaped_fill` in the trace `policy` block;
 this run's traces do not.
 
+**Concept-type note (2026-08-15):** concept frontmatter `type` was renamed
+`Reference` → `Concept` on develop after this run. Stub rebuilds from the
+README's pins on okf-core > 0.3.3 therefore produce different concept bytes and
+different revision IDs than the table above (handbook `rev-6d9343b3e29b`,
+ripgrep `rev-6a0aa0b63a08`). Questions, gold evidence, and `references/` paths
+are unaffected — the change is cosmetic frontmatter only and does not alter
+retrieval or answers.
+
 ## Summary
 
 | metric | pd | rag |

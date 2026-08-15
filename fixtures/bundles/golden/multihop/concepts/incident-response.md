@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Incident response
 description: What happens when a page fires out of hours.
 tags:
