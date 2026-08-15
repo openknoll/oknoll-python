@@ -35,7 +35,7 @@ from typing import Any
 
 from okf_core import bundle as bundle_mod
 from okf_core.canonical import sha256_hex
-from okf_core.explorer import Explorer, estimate_tokens
+from okf_core.explorer import Explorer, ExplorerError, estimate_tokens
 from okf_core.frontmatter import Frontmatter, parse_document
 from okf_core.indexing import question_terms, term_occurrences, tokenize
 from okf_core.provider import ModelProvider
@@ -83,6 +83,30 @@ ASK_POLICY_V1 = AskPolicy(
     max_evidence=MAX_EVIDENCE,
     excerpt_chars=EXCERPT_CHARS,
 )
+
+
+# Chat context bounds: how much of a conversation reaches retrieval and the
+# prompt. Prior answers are clipped so a long conversation cannot displace the
+# evidence, and carryover reads are capped so the previous topic cannot crowd
+# out the current question's own search hits.
+MAX_CHAT_TURNS = 4
+CHAT_ANSWER_CHARS = 600
+MAX_CARRYOVER_READS = 2
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationContext:
+    """Prior chat turns as retrieval and prompt context (PD condition only).
+
+    ``turns`` are ``{"question", "answer"}`` pairs, oldest→newest;
+    ``carryover_paths`` are the previous answer's citation paths, which seed
+    retrieval so a follow-up ("what are its limitations?") finds the documents
+    the conversation is about even when its terms match nothing. Both come from
+    the conversation transcript — untrusted data, never instructions.
+    """
+
+    turns: list[dict[str, str]]
+    carryover_paths: list[str]
 
 
 def default_policy(budget_tokens: int) -> AskPolicy:
@@ -351,6 +375,7 @@ def answer_question(
     clock: Callable[[], str] | None = None,
     timer: Callable[[], float] | None = None,
     policy: AskPolicy | None = None,
+    conversation: ConversationContext | None = None,
 ) -> AskResult:
     """Answer one question under a retrieval condition.
 
@@ -393,28 +418,54 @@ def answer_question(
 
     # 2. narrow through lexical search. Concepts are the navigation surface;
     #    reference snapshots are raw sources, consulted only when no concept hit.
+    #    In a conversation, the previous answer's citations seed the candidates
+    #    (bounded carryover): a follow-up usually asks about the documents the
+    #    conversation is already on, in vocabulary search cannot match.
     search = traced.call("search", query=question)
     results = list(search["results"])
     concept_hits = [str(r["path"]) for r in results if r["kind"] == "concept"]
     reference_hits = [str(r["path"]) for r in results if r["kind"] == "reference"]
-    candidates = concept_hits[: policy.max_concept_reads]
+    carryover: list[str] = []
+    if conversation is not None:
+        carryover = [
+            path
+            for path in dict.fromkeys(conversation.carryover_paths)
+            if bundle_mod.is_concept(path)
+        ][:MAX_CARRYOVER_READS]
+    candidates = list(dict.fromkeys(carryover + concept_hits))[: policy.max_concept_reads]
     if not candidates:
         candidates = reference_hits[: policy.max_concept_reads]
 
     # 3. peek before read; both stay within the token budget — peeks over large
     #    bundles are not free, and the budget is a hard cap, not a suggestion.
+    #    A carryover path is transcript data and may not survive in this
+    #    revision — it is skipped on refusal, never an error; search-derived
+    #    paths keep failing loudly.
     read_docs: list[dict[str, Any]] = []
     budget_exhausted = False
+    dropped: set[str] = set()
     for path in candidates:
         if traced.spent_tokens >= budget_tokens:
             budget_exhausted = True
             break
-        traced.call("peek", path=path)
+        try:
+            traced.call("peek", path=path)
+        except ExplorerError:
+            if path not in carryover:
+                raise
+            dropped.add(path)
     for path in candidates:
         if traced.spent_tokens >= budget_tokens:
             budget_exhausted = True
             break
-        doc = traced.call("read", path=path)
+        if path in dropped:
+            continue
+        try:
+            doc = traced.call("read", path=path)
+        except ExplorerError:
+            if path not in carryover:
+                raise
+            continue
         doc["_terms"] = terms
         doc["_via"] = None
         read_docs.append(doc)
@@ -533,16 +584,27 @@ def answer_question(
             )
     else:
         abstained = False
-        answer = provider.complete(
-            "answer-question",
-            {
-                "question": question,
-                "evidence": [
-                    {"path": e["path"], "title": e["title"], "excerpt": e["excerpt"]}
-                    for e in evidence
-                ],
-            },
-        )
+        payload: dict[str, Any] = {
+            "question": question,
+            "evidence": [
+                {"path": e["path"], "title": e["title"], "excerpt": e["excerpt"]} for e in evidence
+            ],
+        }
+        # A conversation switches to the chat prompt: history rides as a
+        # structured data field (clipped answers, bounded turn count), never
+        # concatenated into the question — prior answers are data, and every
+        # claim must still be supported by this turn's evidence.
+        if conversation is not None and conversation.turns:
+            payload["history"] = [
+                {
+                    "question": str(turn.get("question", "")),
+                    "answer": str(turn.get("answer", ""))[:CHAT_ANSWER_CHARS],
+                }
+                for turn in conversation.turns[-MAX_CHAT_TURNS:]
+            ]
+            answer = provider.complete("chat-answer", payload)
+        else:
+            answer = provider.complete("answer-question", payload)
         model_usage = getattr(provider, "last_usage", None)
         cited_paths: set[str] = set()
         for entry in evidence:
@@ -589,6 +651,13 @@ def answer_question(
         "evidence_paths": [str(e["path"]) for e in evidence],
         "abstained": abstained,
     }
+    if conversation is not None:
+        read_paths = {str(doc["path"]) for doc in read_docs}
+        trace["conversation"] = {
+            "prior_turns": len(conversation.turns),
+            "carryover_paths": carryover,
+            "carryover_read": [p for p in carryover if p in read_paths],
+        }
 
     return AskResult(
         question=question,

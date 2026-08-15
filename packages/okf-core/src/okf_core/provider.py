@@ -30,6 +30,7 @@ PROMPT_VERSIONS: dict[str, str] = {
     "reference-description": "1",
     "bundle-description": "1",
     "answer-question": "1",
+    "chat-answer": "1",
 }
 
 # Default for the user-facing regeneration knob ([build].generation_version in
@@ -74,10 +75,15 @@ class StubModelProvider:
                 f"Knowledge bundle for {name} covering {count} concept(s) "
                 "built from acquired sources."
             )
-        if prompt_id == "answer-question":
+        if prompt_id in ("answer-question", "chat-answer"):
             evidence = payload.get("evidence")
             items = evidence if isinstance(evidence, list) else []
-            lines = [f"Based on {len(items)} passage(s) retrieved from the bundle:"]
+            if prompt_id == "chat-answer":
+                history = payload.get("history")
+                prior = len(history) if isinstance(history, list) else 0
+                lines = [f"Based on {len(items)} passage(s) and {prior} prior turn(s):"]
+            else:
+                lines = [f"Based on {len(items)} passage(s) retrieved from the bundle:"]
             for item in items:
                 if not isinstance(item, dict):
                     continue
