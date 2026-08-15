@@ -47,7 +47,7 @@ def test_overview_summarizes_types_tags_and_trust(minimal: Path) -> None:
     overview = Explorer(minimal, today="2026-08-04").overview()
     assert overview["title"] == "Minimal golden bundle"
     assert overview["counts"] == {"concepts": 2, "references": 1}
-    assert overview["types"] == {"Reference": 2}
+    assert overview["types"] == {"Concept": 2}
     assert overview["tags"] == {"architecture": 2, "security": 1}
     assert overview["trust"] == {
         "statuses": {"draft": 1, "stable": 1},
@@ -68,7 +68,7 @@ def test_tools_share_one_file_snapshot_across_a_mid_session_rebuild(minimal: Pat
     assert explorer.overview()["counts"]["concepts"] == 2
 
     (minimal / "concepts" / "added-after-startup.md").write_text(
-        "---\ntitle: Late\ntype: Reference\n---\n\nAppeared after the snapshot.\n",
+        "---\ntitle: Late\ntype: Concept\n---\n\nAppeared after the snapshot.\n",
         encoding="utf-8",
     )
     # overview and list must not blow up, and must agree with the pinned set.
@@ -154,7 +154,7 @@ def test_peek_and_read_bound_oversized_frontmatter(minimal: Path) -> None:
     target = minimal / "concepts" / "architecture.md"
     body = target.read_text(encoding="utf-8").split("---\n", 2)[2]
     target.write_text(
-        "---\ntitle: Big\ntype: Reference\nnote: " + "X" * 300_000 + "\n---\n" + body,
+        "---\ntitle: Big\ntype: Concept\nnote: " + "X" * 300_000 + "\n---\n" + body,
         encoding="utf-8",
     )
     explorer = Explorer(minimal)
@@ -268,7 +268,7 @@ def test_a_symlink_into_derived_state_is_not_bundle_content(tmp_path: Path) -> N
     trace.write_text('{"evidence": "PRIORQUESTION alpha"}', encoding="utf-8")
     (bundle / "index.md").write_text("---\ntitle: B\n---\n\n# B\n", encoding="utf-8")
     (bundle / "concepts" / "real.md").write_text(
-        "---\ntype: Reference\ntitle: R\n---\n\n# R\n\nreal content\n", encoding="utf-8"
+        "---\ntype: Concept\ntitle: R\n---\n\n# R\n\nreal content\n", encoding="utf-8"
     )
     (bundle / "concepts" / "leak.md").symlink_to("../.oknoll/traces/t.json")
 

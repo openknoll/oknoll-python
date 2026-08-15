@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Questionable provenance
 description: Wrong lifecycle value, malformed generated event, uncited claim.
 status: experimental

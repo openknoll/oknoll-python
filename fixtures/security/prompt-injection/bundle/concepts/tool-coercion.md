@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Tool coercion
 description: Bundle text that tries to trigger tool and network execution.
 status: draft

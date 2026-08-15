@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Escaping concept
 sources:
 - id: source-001

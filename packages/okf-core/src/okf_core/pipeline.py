@@ -635,7 +635,7 @@ def _write_concept(
 
     frontmatter = Frontmatter(
         data={
-            "type": "Reference",
+            "type": "Concept",
             "title": doc.title,
             "description": description,
             "status": "draft",
