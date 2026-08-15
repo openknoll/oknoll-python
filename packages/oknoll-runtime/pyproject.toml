@@ -1,0 +1,18 @@
+[project]
+name = "oknoll-runtime"
+version = "0.3.3"
+description = "OpenKnoll local runtime: content-addressed store, OkNoll OCI images, catalog, locators"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+readme = "README.md"
+dependencies = [
+    "okf-core==0.3.3",
+    "platformdirs>=4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oknoll_runtime"]

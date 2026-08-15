@@ -15,6 +15,7 @@ members = [
     "oknoll-eval",
     "oknoll-providers",
     "oknoll-python-workspace",
+    "oknoll-runtime",
 ]
 
 [[package]]
@@ -817,6 +818,7 @@ dependencies = [
     { name = "oknoll-connectors" },
     { name = "oknoll-eval" },
     { name = "oknoll-providers" },
+    { name = "oknoll-runtime" },
     { name = "typer" },
 ]
 
@@ -827,6 +829,7 @@ requires-dist = [
     { name = "oknoll-connectors", editable = "packages/connectors" },
     { name = "oknoll-eval", editable = "packages/eval" },
     { name = "oknoll-providers", editable = "packages/providers" },
+    { name = "oknoll-runtime", editable = "packages/oknoll-runtime" },
     { name = "typer", specifier = ">=0.15" },
 ]
 
@@ -903,6 +906,21 @@ dev = [
 ]
 
 [[package]]
+name = "oknoll-runtime"
+version = "0.3.3"
+source = { editable = "packages/oknoll-runtime" }
+dependencies = [
+    { name = "okf-core" },
+    { name = "platformdirs" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "okf-core", editable = "packages/okf-core" },
+    { name = "platformdirs", specifier = ">=4.0" },
+]
+
+[[package]]
 name = "opentelemetry-api"
 version = "1.44.0"
 source = { registry = "https://pypi.org/simple" }
@@ -930,6 +948,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5a/82/42f767fc1c1143d6fd36efb827202a2d997a375e160a71eb2888a925aac1/pathspec-1.1.1.tar.gz", hash = "sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a", size = 135180, upload-time = "2026-04-27T01:46:08.907Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
+]
+
+[[package]]
+name = "platformdirs"
+version = "4.11.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b8/d7/e7bfbc86e9f99ff7807e24de7703f032e9c9ba80bb355cf26e0e9bc5a75e/platformdirs-4.11.3.tar.gz", hash = "sha256:66a73d38a849810252df809a3d8bcbda8e26f6c189920e7535ad608a48dbb5ab", size = 33050, upload-time = "2026-08-13T22:43:27.52Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/19/a9/c34aebedd3a4c9afe5101b1b8713710b3fec18087c8a36c35d2f909861bd/platformdirs-4.11.3-py3-none-any.whl", hash = "sha256:5ed065d443751de711da036041a7a214122efc4a4de393b3f4137ba5576540e7", size = 23491, upload-time = "2026-08-13T22:43:26.121Z" },
 ]
 
 [[package]]

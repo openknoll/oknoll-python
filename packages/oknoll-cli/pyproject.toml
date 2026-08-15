@@ -12,6 +12,7 @@ dependencies = [
     "oknoll-connectors==0.3.3",
     "oknoll-eval==0.3.3",
     "oknoll-providers==0.3.3",
+    "oknoll-runtime==0.3.3",
     "typer>=0.15",
     "mcp>=1.9",
 ]
