@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import typer
 from okf_core import (
@@ -229,10 +230,111 @@ def _write_runtime_trace(alias: str, result: AskResult) -> Path:
     return path
 
 
+def _daemon_chat(targets: list[str], *, mode: str) -> None:
+    """Multi-turn chat against the running daemon; one pinned session per alias."""
+    import httpx
+    from oknoll_runtime.daemon import daemon_url, read_record, read_token
+
+    dirs = runtime_dirs()
+    record = read_record(dirs.state)
+    token = read_token(dirs.state)
+    if record is None or token is None:
+        raise fail(
+            "oknoll query chat: the daemon is not running — start it with `oknoll daemon start`"
+        )
+
+    aliases: list[str] = []
+    for target in targets:
+        locator = parse_cli_locator(target)
+        alias = locator.name or ""
+        if alias not in aliases:
+            aliases.append(alias)
+
+    sessions: dict[str, dict[str, Any]] = {}
+    with httpx.Client(
+        base_url=daemon_url(record),
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=httpx.Timeout(180.0, connect=5.0),
+    ) as client:
+        for alias in aliases:
+            try:
+                response = client.post("/api/v1/sessions", json={"bundle": alias, "mode": mode})
+            except httpx.HTTPError as exc:
+                raise fail(f"oknoll query chat: cannot reach the daemon: {exc}") from exc
+            body = response.json()
+            if response.status_code != 201:
+                raise fail(f"oknoll query chat: {body.get('message', 'session refused')}")
+            sessions[alias] = body
+            typer.secho(
+                f"{alias}@{body['oci_digest']} ({body['okf_revision']}) — "
+                f"session {body['session']}, mode {body['mode']}",
+                fg=typer.colors.GREEN,
+            )
+
+        current = aliases[0]
+        typer.echo(
+            "ask questions; prefix `@alias ` to address another bundle; empty line "
+            "or `exit` to quit"
+        )
+        while True:
+            try:
+                question = typer.prompt(
+                    f"you[{current}]", prompt_suffix="> ", default="", show_default=False
+                )
+            except (typer.Abort, EOFError):
+                break
+            question = question.strip()
+            if not question or question.lower() in ("exit", "quit", "/exit", "/quit"):
+                break
+            if question == "/bundles":
+                for alias in aliases:
+                    marker = "*" if alias == current else " "
+                    typer.echo(f"{marker} {alias}")
+                continue
+            if question.startswith("@"):
+                prefix, _, rest = question.partition(" ")
+                alias = prefix[1:]
+                if alias not in sessions:
+                    typer.secho(
+                        f"no session for {alias!r} (have: {', '.join(aliases)})",
+                        fg=typer.colors.RED,
+                        err=True,
+                    )
+                    continue
+                current = alias
+                question = rest.strip()
+                if not question:
+                    continue
+
+            try:
+                response = client.post(
+                    "/api/v1/ask",
+                    json={"session": sessions[current]["session"], "question": question},
+                )
+            except httpx.HTTPError as exc:
+                typer.secho(f"error: cannot reach the daemon: {exc}", fg=typer.colors.RED, err=True)
+                continue
+            body = response.json()
+            if response.status_code != 200:
+                typer.secho(
+                    f"error: {body.get('message', 'ask failed')}", fg=typer.colors.RED, err=True
+                )
+                continue
+            typer.secho(body["bundle"], fg=typer.colors.BLUE)
+            typer.echo(body["answer"])
+            for citation in body.get("citations", []):
+                typer.echo(f"  - {citation.get('qualified', citation.get('path'))}")
+            for warning in body.get("warnings", []):
+                typer.secho(f"  ! {warning}", fg=typer.colors.YELLOW)
+
+
 @query_app.command("chat")
 def chat(
     bundle: list[str] = typer.Option(
-        [], "--bundle", help="Bundle directory path; repeatable once the daemon lands."
+        [],
+        "--bundle",
+        help="Bundle to chat with: a directory path (single, in-process) or an "
+        "installed alias (repeatable — served by the running daemon).",
     ),
     mode: str | None = typer.Option(None, "--mode", help="Retrieval condition: pd or rag."),
     resume: str | None = typer.Option(None, "--resume", help="Resume a conversation by ID."),
@@ -243,11 +345,28 @@ def chat(
             f"oknoll query chat: unknown mode {mode!r} (pd|rag)", fg=typer.colors.RED, err=True
         )
         raise typer.Exit(code=2)
-    if len(bundle) > 1:
-        # The grammar stays stable; the capability arrives with the daemon.
-        raise fail(
-            "oknoll query chat: multi-bundle chat needs the daemon — pass at most one --bundle"
-        )
+
+    kinds = [parse_cli_locator(target).kind for target in bundle]
+    if any(kind in ("oci", "oknoll") for kind in kinds):
+        not_yet("query chat (remote locators)", "the registry client")
+    daemon_targets = [
+        target for target, kind in zip(bundle, kinds, strict=True) if kind in ("bare", "local")
+    ]
+    if daemon_targets or len(bundle) > 1:
+        # Aliases (and any multi-bundle chat) are served by the daemon, which
+        # pins each session to the installed revision.
+        if len(daemon_targets) != len(bundle):
+            raise fail(
+                "oknoll query chat: daemon chat serves installed bundles — pass "
+                "aliases only (mixing directory paths is not supported)"
+            )
+        if resume is not None:
+            raise fail(
+                "oknoll query chat: --resume applies to project chat — daemon "
+                "sessions are per-invocation"
+            )
+        _daemon_chat(daemon_targets, mode=mode or "pd")
+        return
 
     config = load_project()
     provider = provider_for(config)

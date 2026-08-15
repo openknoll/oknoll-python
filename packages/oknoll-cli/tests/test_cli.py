@@ -133,21 +133,27 @@ def test_legacy_commands_are_pointer_only(old: str) -> None:
 
 
 def test_not_yet_commands_fail_clearly() -> None:
-    # Phase 16 wired the local store surface (bundle install/…, image build/…);
-    # what remains stubbed is the registry client, daemon, and hosted surface.
+    # The daemon surface is wired; what remains stubbed is the registry
+    # client and the hosted control plane.
     for args in (
         ["auth", "login"],
         ["bundle", "connect", "oknoll://openknoll.com/acme/handbook", "--as", "x"],
         ["image", "push", "ref"],
         ["image", "pull", "ref"],
-        ["daemon", "start"],
-        ["ui", "open"],
         ["registry", "inspect", "ref"],
-        ["mcp", "config", "--client", "claude"],
     ):
         result = runner.invoke(app, args)
         assert result.exit_code == 2, f"{args}: {result.exit_code}"
         assert "not implemented yet" in _output(result), args
+
+
+def test_daemon_os_service_commands_are_deferred() -> None:
+    # `daemon install|uninstall` stay registered but print a deferred notice
+    # (ADR-scoped cut: OS-service installation waits for real restart pain).
+    for args in (["daemon", "install"], ["daemon", "uninstall"]):
+        result = runner.invoke(app, args)
+        assert result.exit_code == 2, f"{args}: {result.exit_code}"
+        assert "deferred" in _output(result), args
 
 
 def test_remote_locators_point_at_the_registry_client() -> None:
