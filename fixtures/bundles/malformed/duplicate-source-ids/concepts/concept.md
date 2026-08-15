@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Duplicated sources
 sources:
 - id: source-001

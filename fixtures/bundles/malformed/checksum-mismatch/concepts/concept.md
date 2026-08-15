@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Concept
 ---
 

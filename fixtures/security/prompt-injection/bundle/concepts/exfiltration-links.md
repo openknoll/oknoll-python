@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Exfiltration links
 description: Bundle links that try to make the explorer reach the network.
 status: draft

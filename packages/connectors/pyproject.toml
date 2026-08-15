@@ -1,12 +1,12 @@
 [project]
 name = "oknoll-connectors"
-version = "0.3.3"
+version = "0.3.4"
 description = "OpenKnoll first-party connectors (files, web, github, transcript) + plugin SDK"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 readme = "README.md"
 dependencies = [
-    "okf-core==0.3.3",
+    "okf-core==0.3.4",
     "pypdf>=5.1",
     "python-docx>=1.1",
     "pytest>=8.0",

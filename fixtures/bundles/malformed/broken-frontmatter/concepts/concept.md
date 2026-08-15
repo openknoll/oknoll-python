@@ -1,4 +1,4 @@
 ---
-type: Reference
+type: Concept
 title: [unclosed
 status draft

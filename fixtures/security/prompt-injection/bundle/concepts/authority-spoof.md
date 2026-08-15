@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Authority spoof
 description: Bundle text claiming an authority the frontmatter does not record.
 status: draft

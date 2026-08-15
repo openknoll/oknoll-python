@@ -2,12 +2,12 @@
   "okf_version": "0.2",
   "files": {
     "concepts/architecture.md": {
-      "sha256": "9f3d537c6cf0bd1baf16b06992c63a226cc51f8606aac434a3fa173c61d35975",
-      "bytes": 571
+      "sha256": "33d21ab13ca88b94f61c0bebb3e626267e7690e16096a844f40162f9e5a92ce9",
+      "bytes": 569
     },
     "concepts/authentication.md": {
-      "sha256": "633f9d91adcb0beec44820ec66d13feb9271d59a204bdd946c0f19c6c8151756",
-      "bytes": 508
+      "sha256": "ffce9fda7a6e65cce3b4834e8822b82e2a8e24b9d5a763cb6b8b336f13eee753",
+      "bytes": 506
     },
     "index.md": {
       "sha256": "9f6c4b012e611fa1eca3015ad6f47e3007d48f3bbb32eff21ea38e81c1298d4b",

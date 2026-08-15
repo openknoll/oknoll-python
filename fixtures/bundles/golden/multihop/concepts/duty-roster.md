@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Duty roster
 description: Who currently holds each operational responsibility.
 tags:

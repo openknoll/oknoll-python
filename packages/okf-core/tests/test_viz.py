@@ -45,7 +45,7 @@ def test_node_metadata_projection(golden_dir: Path) -> None:
     by_path = {n["path"]: n for n in graph["nodes"]}
     release = by_path["concepts/release-process.md"]
     assert release["title"] == "Release process"
-    assert release["type"] == "Reference"
+    assert release["type"] == "Concept"
     assert release["trust_tier"] == "human-reviewed"
     assert release["stale"] is False
     # Frontmatter-less reference snapshots still project as titled nodes.

@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Release process
 description: How a build reaches production and who must agree to it.
 tags:
