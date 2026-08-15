@@ -61,6 +61,42 @@ def test_chat_answers_and_persists_the_conversation(built_project: Path) -> None
     assert (built_project / assistant["trace_path"]).is_file()
 
 
+def test_chat_second_turn_carries_the_conversation(built_project: Path) -> None:
+    """Turn two answers under the chat prompt: the stub's reply names the prior
+    turn count, proving history reached the model as structured context."""
+    result = runner.invoke(
+        app,
+        ["chat"],
+        input="How are credentials stored?\nHow are credentials stored?\nexit\n",
+    )
+    assert result.exit_code == 0, _output(result)
+    output = _output(result)
+    assert "Based on" in output and "prior turn(s):" in output
+
+    [conversation_file] = _conversation_files(built_project)
+    lines = [
+        json.loads(line) for line in conversation_file.read_text(encoding="utf-8").splitlines()
+    ]
+    assistants = [line for line in lines if line.get("role") == "assistant"]
+    assert len(assistants) == 2
+    assert "prior turn(s):" not in assistants[0]["text"]  # turn one had no history
+    assert "1 prior turn(s):" in assistants[1]["text"]
+
+
+def test_chat_resume_restores_the_conversation_context(built_project: Path) -> None:
+    assert runner.invoke(app, ["chat"], input="How are credentials stored?\nexit\n").exit_code == 0
+    conversation_id = _conversation_files(built_project)[0].stem
+
+    result = runner.invoke(
+        app,
+        ["chat", "--resume", conversation_id],
+        input="How are credentials stored?\nexit\n",
+    )
+    assert result.exit_code == 0, _output(result)
+    # The resumed turn sees the transcript's prior turn.
+    assert "1 prior turn(s):" in _output(result)
+
+
 def test_chat_resume_continues_the_same_conversation(built_project: Path) -> None:
     assert runner.invoke(app, ["chat"], input="exit\n").exit_code == 0
     conversation_id = _conversation_files(built_project)[0].stem

@@ -18,11 +18,21 @@ from okf_core.canonical import sha256_hex
 # 3: concepts carry a Related section and may be model-planned slices of a
 #    source — cached plans and stamps from the one-concept-per-doc era must
 #    not pair with the new bodies.
-GENERATOR_VERSION = "3"
+# 4: self-describing bundles — index entries carry per-entry descriptions,
+#    reference snapshots and the root index carry model-generated
+#    descriptions — v3 stamps and plans must not pair with the new bodies.
+GENERATOR_VERSION = "4"
 PROMPT_VERSIONS: dict[str, str] = {
-    "concept-description": "1",
-    "concept-plan": "1",
+    # 2: input is the concept's section outline (not the first paragraph) and
+    #    the first sentence must stand alone as the index-line summary.
+    "concept-description": "2",
+    # 2: outline payload gained per-section subheadings and longer snippets;
+    #    guidance retuned from "one to six" to topic-per-concept granularity.
+    "concept-plan": "2",
+    "reference-description": "1",
+    "bundle-description": "1",
     "answer-question": "1",
+    "chat-answer": "1",
 }
 
 # Default for the user-facing regeneration knob ([build].generation_version in
@@ -56,10 +66,26 @@ class StubModelProvider:
             # The stub never splits: an empty concept list means "keep the
             # document as one concept", the pre-planner behavior.
             return '{"concepts": []}'
-        if prompt_id == "answer-question":
+        if prompt_id == "reference-description":
+            title = str(payload.get("title", "")).strip() or "this source"
+            return f"Acquired source snapshot of {title}."
+        if prompt_id == "bundle-description":
+            name = str(payload.get("name", "")).strip() or "this bundle"
+            concepts = payload.get("concepts")
+            count = len(concepts) if isinstance(concepts, list) else 0
+            return (
+                f"Knowledge bundle for {name} covering {count} concept(s) "
+                "built from acquired sources."
+            )
+        if prompt_id in ("answer-question", "chat-answer"):
             evidence = payload.get("evidence")
             items = evidence if isinstance(evidence, list) else []
-            lines = [f"Based on {len(items)} passage(s) retrieved from the bundle:"]
+            if prompt_id == "chat-answer":
+                history = payload.get("history")
+                prior = len(history) if isinstance(history, list) else 0
+                lines = [f"Based on {len(items)} passage(s) and {prior} prior turn(s):"]
+            else:
+                lines = [f"Based on {len(items)} passage(s) retrieved from the bundle:"]
             for item in items:
                 if not isinstance(item, dict):
                     continue

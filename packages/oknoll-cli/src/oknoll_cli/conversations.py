@@ -100,3 +100,47 @@ def append_turn(conversation: Conversation, role: str, payload: dict[str, Any]) 
     record = {"type": "turn", "role": role, **payload}
     with conversation.path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def read_turns(conversation: Conversation) -> list[dict[str, Any]]:
+    """Parsed turn records, transcript order; malformed lines are skipped with
+    the same tolerance as the turn counter."""
+    try:
+        lines = conversation.path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return []
+    records: list[dict[str, Any]] = []
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict) and record.get("type") == "turn":
+            records.append(record)
+    return records
+
+
+def qa_history(conversation: Conversation) -> tuple[list[dict[str, str]], list[str]]:
+    """(question/answer pairs oldest→newest, the last answer's citation paths).
+
+    The transcript is the only state chat has between turns — this pairs each
+    user turn with the assistant turn that answered it (error turns leave a
+    question unpaired and it is dropped) and surfaces the most recent answer's
+    citations for retrieval carryover.
+    """
+    turns: list[dict[str, str]] = []
+    carryover: list[str] = []
+    pending: str | None = None
+    for record in read_turns(conversation):
+        role = record.get("role")
+        if role == "user":
+            pending = str(record.get("text", ""))
+        elif role == "assistant":
+            if pending is not None:
+                turns.append({"question": pending, "answer": str(record.get("text", ""))})
+                pending = None
+            citations = record.get("citations")
+            carryover = [str(c) for c in citations] if isinstance(citations, list) else []
+    return turns, carryover

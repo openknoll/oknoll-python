@@ -40,6 +40,7 @@ from okf_core import (
     write_viz,
 )
 from okf_core import __version__ as core_version
+from okf_core.ask import ConversationContext
 from oknoll_connectors import (
     ConnectorError,
     FetchPolicy,
@@ -529,6 +530,15 @@ def chat(
             )
             break
 
+        # The transcript is the conversation's memory: prior question/answer
+        # pairs reach the prompt and the last answer's citations seed retrieval.
+        # PD only — the RAG baseline stays conversation-blind by design.
+        context = None
+        if conversation.mode == "pd":
+            history, carryover = conversations.qa_history(conversation)
+            if history or carryover:
+                context = ConversationContext(turns=history, carryover_paths=carryover)
+
         conversations.append_turn(conversation, "user", {"text": question})
         try:
             result = answer_question(
@@ -538,6 +548,7 @@ def chat(
                 today=date.today().isoformat(),
                 condition=conversation.mode,
                 embedder=embedder,
+                conversation=context,
             )
         except (ExplorerError, ValueError, ProviderError) as exc:
             typer.secho(f"error: {exc}", fg=typer.colors.RED, err=True)

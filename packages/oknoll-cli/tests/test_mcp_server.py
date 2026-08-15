@@ -141,6 +141,19 @@ def test_peek_then_read_with_caps(minimal: Path) -> None:
     read = _payload(_call(minimal, "read", {"path": "concepts/architecture.md", "max_chars": 20}))
     assert read["truncated"] is True
     assert len(str(read["body"])) == 20
+    assert read["next_start"] == 20
+
+    # Paging over the protocol: the second page continues where the first ended.
+    second = _payload(
+        _call(
+            minimal,
+            "read",
+            {"path": "concepts/architecture.md", "max_chars": 20, "start_char": 20},
+        )
+    )
+    assert second["start_char"] == 20
+    full = _payload(_call(minimal, "read", {"path": "concepts/architecture.md"}))
+    assert str(read["body"]) + str(second["body"]) == str(full["body"])[:40]
 
 
 def test_links_reports_graph_edges(multihop: Path) -> None:

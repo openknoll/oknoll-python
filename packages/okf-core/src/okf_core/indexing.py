@@ -112,11 +112,17 @@ _MAX_QUERY_TERMS = 12
 _FALLBACK_INDEXES: dict[tuple[str, str], Path] = {}
 
 
+# Bound on the description a search hit carries: enough for one full sentence,
+# small enough that a 25-hit page stays cheap.
+MAX_HIT_DESCRIPTION_CHARS = 300
+
+
 @dataclass(frozen=True, slots=True)
 class SearchHit:
     path: str
     kind: str  # concept | reference | index
     title: str
+    description: str
     snippet: str
     score: float
 
@@ -125,6 +131,7 @@ class SearchHit:
             "path": self.path,
             "kind": self.kind,
             "title": self.title,
+            "description": self.description,
             "snippet": self.snippet,
             "score": self.score,
         }
@@ -310,7 +317,7 @@ def search_index(index_dir: Path, query: str, *, limit: int = 10) -> list[Search
     con = sqlite3.connect(index_dir / FTS_NAME)
     try:
         rows = con.execute(
-            "SELECT path, kind, title, "
+            "SELECT path, kind, title, description, "
             "snippet(docs, 5, '[', ']', ' … ', 12) AS snip, "
             "bm25(docs, 0.0, 0.0, 5.0, 3.0, 2.0, 1.0) AS score "
             "FROM docs WHERE docs MATCH ? ORDER BY score, path LIMIT ?",
@@ -323,8 +330,9 @@ def search_index(index_dir: Path, query: str, *, limit: int = 10) -> list[Search
             path=str(path),
             kind=str(kind),
             title=str(title),
+            description=str(description)[:MAX_HIT_DESCRIPTION_CHARS],
             snippet=str(snip),
             score=round(float(score), 6),
         )
-        for path, kind, title, snip, score in rows
+        for path, kind, title, description, snip, score in rows
     ]
