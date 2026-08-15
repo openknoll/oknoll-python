@@ -58,6 +58,50 @@ TRACE_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
+class AskPolicy:
+    """The PD navigation policy's bounds, versioned for eval comparability.
+
+    The trace records ``version`` so two runs are only ever compared under the
+    same policy; the a2k-v1 eval pins :data:`ASK_POLICY_V1` (the frozen spec's
+    constants), while interactive ``ask``/``chat`` default to a
+    budget-proportional v2 (:func:`default_policy`).
+    """
+
+    version: str
+    max_concept_reads: int
+    max_link_fanout: int
+    max_evidence: int
+    excerpt_chars: int
+
+
+# Policy v1: the module constants above, frozen — the a2k-v1 benchmark ran
+# under these bounds and must keep reproducing them byte-for-byte.
+ASK_POLICY_V1 = AskPolicy(
+    version="1",
+    max_concept_reads=MAX_CONCEPT_READS,
+    max_link_fanout=MAX_LINK_FANOUT,
+    max_evidence=MAX_EVIDENCE,
+    excerpt_chars=EXCERPT_CHARS,
+)
+
+
+def default_policy(budget_tokens: int) -> AskPolicy:
+    """Policy v2: evidence scales with the retrieval budget, deterministically.
+
+    A pure function of ``budget_tokens`` — at the default 25K budget this reads
+    up to 6 concepts and shows the model up to 8 excerpts of 1,000 chars (4x
+    the v1 evidence), still far inside the retrieval budget.
+    """
+    return AskPolicy(
+        version="2",
+        max_concept_reads=min(8, max(4, budget_tokens // 4_000)),
+        max_link_fanout=min(8, max(4, budget_tokens // 6_000)),
+        max_evidence=min(12, max(4, budget_tokens // 3_000)),
+        excerpt_chars=min(2_000, max(500, budget_tokens // 25)),
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class Citation:
     path: str  # qualified bundle path
     title: str
@@ -164,7 +208,13 @@ def _candidate_paragraphs(body: str) -> list[tuple[str, str]]:
     return candidates
 
 
-def _ranked_excerpts(body: str, terms: set[str], description: str = "") -> list[tuple[str, int]]:
+def _ranked_excerpts(
+    body: str,
+    terms: set[str],
+    description: str = "",
+    *,
+    excerpt_chars: int = EXCERPT_CHARS,
+) -> list[tuple[str, int]]:
     """One document's matching prose excerpts as (excerpt, distinct), best first.
 
     Order is (distinct term hits, total occurrences) descending, document order
@@ -198,7 +248,7 @@ def _ranked_excerpts(body: str, terms: set[str], description: str = "") -> list[
         if terms & tokens and not tokens <= terms:
             scored = [(-len(terms & tokens), 0, 0, description)]
     return [
-        (_visible_prose(para).strip()[:EXCERPT_CHARS], -neg_distinct)
+        (_visible_prose(para).strip()[:excerpt_chars], -neg_distinct)
         for neg_distinct, _, _, para in scored
     ]
 
@@ -219,7 +269,9 @@ def _title_shaped(terms: set[str], title: str) -> bool:
     return bool(terms) and terms <= tokenize(title)
 
 
-def _filler_excerpts(body: str, terms: set[str]) -> list[str]:
+def _filler_excerpts(
+    body: str, terms: set[str], *, excerpt_chars: int = EXCERPT_CHARS
+) -> list[str]:
     """Non-matching prose of a title-shaped document, best-structured first.
 
     The sections a concept groups under its title are exactly the ones that
@@ -238,7 +290,7 @@ def _filler_excerpts(body: str, terms: set[str]) -> list[str]:
         if terms & tokens or not tokens:
             continue  # matching prose already competes in _ranked_excerpts
         bucket = section_digests if section == "sections" else rest
-        bucket.append(prose.strip()[:EXCERPT_CHARS])
+        bucket.append(prose.strip()[:excerpt_chars])
     return section_digests + rest
 
 
@@ -298,13 +350,16 @@ def answer_question(
     embedder: EmbeddingProvider | None = None,
     clock: Callable[[], str] | None = None,
     timer: Callable[[], float] | None = None,
+    policy: AskPolicy | None = None,
 ) -> AskResult:
     """Answer one question under a retrieval condition.
 
     ``pd`` runs the deterministic navigation policy over concepts; ``rag`` runs
     the vector top-k baseline over the identical normalized corpus (reference
-    snapshots). Both share the answer contract, the evidence budget
-    (≤ MAX_EVIDENCE excerpts of ≤ EXCERPT_CHARS), and the trace shape. PD
+    snapshots). Both share the answer contract, a bounded evidence budget, and
+    the trace shape. PD bounds come from ``policy`` (default: the
+    budget-proportional v2 via :func:`default_policy`; the eval pins
+    :data:`ASK_POLICY_V1`). PD
     allocates evidence slots diversity-first: each read document's best excerpt
     claims a slot, spare slots go to remaining matching paragraphs in rank
     order, and last to a title-shaped document's non-matching sections
@@ -327,6 +382,7 @@ def answer_question(
         )
     started_at = clock()
     t0 = timer()
+    policy = policy if policy is not None else default_policy(budget_tokens)
 
     explorer = Explorer(bundle_dir, today=today)
     traced = _Traced(explorer)
@@ -341,9 +397,9 @@ def answer_question(
     results = list(search["results"])
     concept_hits = [str(r["path"]) for r in results if r["kind"] == "concept"]
     reference_hits = [str(r["path"]) for r in results if r["kind"] == "reference"]
-    candidates = concept_hits[:MAX_CONCEPT_READS]
+    candidates = concept_hits[: policy.max_concept_reads]
     if not candidates:
-        candidates = reference_hits[:MAX_CONCEPT_READS]
+        candidates = reference_hits[: policy.max_concept_reads]
 
     # 3. peek before read; both stay within the token budget — peeks over large
     #    bundles are not free, and the budget is a hard cap, not a suggestion.
@@ -371,7 +427,7 @@ def answer_question(
     followed = 0
     seen_paths = {str(doc["path"]) for doc in read_docs}
     for doc in list(read_docs):
-        if followed >= MAX_LINK_FANOUT or traced.spent_tokens >= budget_tokens:
+        if followed >= policy.max_link_fanout or traced.spent_tokens >= budget_tokens:
             break
         parent = str(doc["path"])
         if not bundle_mod.is_concept(parent):
@@ -383,7 +439,7 @@ def answer_question(
         }
         edges = traced.call("links", path=parent)
         for target in list(edges["outbound"]):
-            if followed >= MAX_LINK_FANOUT:
+            if followed >= policy.max_link_fanout:
                 break
             if traced.spent_tokens >= budget_tokens:
                 budget_exhausted = True
@@ -425,6 +481,7 @@ def answer_question(
             str(doc["body"]),
             doc_terms,
             description=description if isinstance(description, str) else "",
+            excerpt_chars=policy.excerpt_chars,
         )
         title = str(frontmatter.get("title") or doc["path"])
         for position, (excerpt, _matched) in enumerate(ranked):
@@ -439,7 +496,9 @@ def answer_question(
         if ranked and _title_shaped(terms, title):
             fillers.extend(
                 _evidence_entry(doc, title, frontmatter, excerpt, 0)
-                for excerpt in _filler_excerpts(str(doc["body"]), doc_terms)
+                for excerpt in _filler_excerpts(
+                    str(doc["body"]), doc_terms, excerpt_chars=policy.excerpt_chars
+                )
             )
     primaries.sort(key=lambda e: -int(e["score"]))  # stable: ties keep navigation order
     extras.sort(key=lambda e: -int(e["score"]))
@@ -451,7 +510,7 @@ def answer_question(
             if isinstance(resource, str):
                 cited_resources.add(resource)
     evidence = [e for e in primaries + extras + fillers if e["path"] not in cited_resources][
-        :MAX_EVIDENCE
+        : policy.max_evidence
     ]
 
     citations: list[Citation] = []
@@ -512,10 +571,11 @@ def answer_question(
             "exhausted": budget_exhausted,
         },
         "policy": {
-            "max_link_fanout": MAX_LINK_FANOUT,
-            "max_concept_reads": MAX_CONCEPT_READS,
-            "max_evidence": MAX_EVIDENCE,
-            "excerpt_chars": EXCERPT_CHARS,
+            "version": policy.version,
+            "max_link_fanout": policy.max_link_fanout,
+            "max_concept_reads": policy.max_concept_reads,
+            "max_evidence": policy.max_evidence,
+            "excerpt_chars": policy.excerpt_chars,
             "title_shaped_fill": True,
         },
         "model_usage": model_usage,
@@ -639,6 +699,7 @@ def _answer_rag(
             "exhausted": budget_exhausted,
         },
         "policy": {
+            "version": "1",  # the RAG baseline stays at the frozen v1 bounds
             "k": MAX_EVIDENCE,
             "chunk_chars": CHUNK_CHARS,
             "embedder": embedder.id,

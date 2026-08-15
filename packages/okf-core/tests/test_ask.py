@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from okf_core import StubModelProvider
 from okf_core.ask import (
+    ASK_POLICY_V1,
     DEFAULT_TOKEN_BUDGET,
     EXCERPT_CHARS,
     MAX_EVIDENCE,
@@ -23,6 +24,7 @@ from okf_core.ask import (
     _ranked_excerpts,
     _title_shaped,
     answer_question,
+    default_policy,
     write_trace,
 )
 
@@ -363,10 +365,44 @@ def test_structural_fill_is_gated_on_title_shaped_questions(multihop: Path) -> N
 
 def test_trace_policy_records_the_evidence_budget_knobs(multihop: Path) -> None:
     """Traces from before and after the diversity-first allocation must be
-    distinguishable — the policy block names the evidence budget."""
+    distinguishable — the policy block names the versioned evidence budget."""
     policy = _ask(multihop, MULTIHOP_QUESTION).trace["policy"]
+    expected = default_policy(DEFAULT_TOKEN_BUDGET)
+    assert policy["version"] == "2"
+    assert policy["max_evidence"] == expected.max_evidence
+    assert policy["excerpt_chars"] == expected.excerpt_chars
+
+
+def test_default_policy_scales_with_the_budget() -> None:
+    """Policy v2 is a pure function of the budget — pinned here as a table."""
+    assert default_policy(25_000) == default_policy(25_000)
+    at_default = default_policy(DEFAULT_TOKEN_BUDGET)
+    assert (at_default.max_concept_reads, at_default.max_link_fanout) == (6, 4)
+    assert (at_default.max_evidence, at_default.excerpt_chars) == (8, 1_000)
+    tiny = default_policy(1_000)
+    assert (tiny.max_concept_reads, tiny.max_evidence, tiny.excerpt_chars) == (4, 4, 500)
+    huge = default_policy(1_000_000)
+    assert (huge.max_concept_reads, huge.max_link_fanout) == (8, 8)
+    assert (huge.max_evidence, huge.excerpt_chars) == (12, 2_000)
+
+
+def test_policy_v1_pin_reproduces_the_frozen_bounds(multihop: Path) -> None:
+    """The eval pins v1: same bounds and trace identity as before the policy
+    became budget-proportional."""
+    provider = StubModelProvider()
+    pinned = answer_question(
+        bundle_dir=multihop,
+        question=MULTIHOP_QUESTION,
+        provider=provider,
+        today=TODAY,
+        policy=ASK_POLICY_V1,
+    )
+    policy = pinned.trace["policy"]
+    assert policy["version"] == "1"
     assert policy["max_evidence"] == MAX_EVIDENCE
     assert policy["excerpt_chars"] == EXCERPT_CHARS
+    assert policy["max_link_fanout"] == MAX_LINK_FANOUT
+    assert len(pinned.trace["evidence_paths"]) <= MAX_EVIDENCE
 
 
 def test_reference_snapshots_do_not_double_cite_their_concept(minimal: Path) -> None:

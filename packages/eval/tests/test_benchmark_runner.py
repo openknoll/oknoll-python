@@ -84,6 +84,7 @@ def test_runner_covers_every_question_under_both_conditions(spec: Path) -> None:
     ]
     assert set(results["revisions"]) == {"minimal", "multihop"}
     assert results["prompt_versions"]  # provenance for the frozen run
+    assert results["ask_policy_version"] == "1"  # a2k specs are frozen under v1
 
 
 def test_gold_evidence_and_abstention_scoring(spec: Path) -> None:
