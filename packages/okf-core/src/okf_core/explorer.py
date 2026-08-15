@@ -349,17 +349,28 @@ class Explorer:
             "truncated": len(body_lines) > lines or len(body_start) < len(body),
         }
 
-    def read(self, path: str, *, max_chars: int = MAX_READ_CHARS) -> dict[str, Any]:
-        """One authorized body plus its links, size-capped."""
+    def read(
+        self, path: str, *, max_chars: int = MAX_READ_CHARS, start_char: int = 0
+    ) -> dict[str, Any]:
+        """One authorized body plus its links, size-capped and pageable.
+
+        A document larger than the per-call cap is read in pages: while
+        ``truncated`` is true, call again with ``start_char`` set to the
+        returned ``next_start`` until it is null. Concatenating the pages
+        reproduces the body exactly; every page is a pure function of
+        ``(revision, path, start_char, max_chars)``.
+        """
         max_chars = max(1, min(max_chars, MAX_READ_CHARS))
         rel = self._safe_rel(path)
         frontmatter, body = self._parse(rel)
-        truncated = len(body) > max_chars
-        clipped = body[:max_chars]
+        start_char = max(0, min(start_char, len(body)))
+        clipped = body[start_char : start_char + max_chars]
+        truncated = start_char + len(clipped) < len(body)
         out_links: list[dict[str, Any]] = []
         # Links come from the whole body, not the clipped text: the cap bounds
         # how much prose a caller receives, and a link straddling the cut would
-        # otherwise vanish here while `links` still reports it.
+        # otherwise vanish here while `links` still reports it. Every page of a
+        # document therefore reports the same link set.
         for link in links_mod.extract_links(body):
             external = links_mod.is_external(link.target)
             resolved = None if external else links_mod.resolve_target(link.target, rel)
@@ -376,6 +387,9 @@ class Explorer:
             "frontmatter": self._bounded_frontmatter(frontmatter),
             "body": clipped,
             "chars": len(clipped),
+            "start_char": start_char,
+            "body_total_chars": len(body),
+            "next_start": start_char + len(clipped) if truncated else None,
             "truncated": truncated,
             "links": out_links,
             **self._freshness(frontmatter),

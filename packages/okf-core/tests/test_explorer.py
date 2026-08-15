@@ -178,6 +178,44 @@ def test_read_caps_size(minimal: Path) -> None:
     read = Explorer(minimal).read("concepts/architecture.md", max_chars=20)
     assert len(str(read["body"])) == 20
     assert read["truncated"] is True
+    assert read["start_char"] == 0
+    assert read["next_start"] == 20
+
+
+def test_read_pages_reassemble_the_full_body(minimal: Path) -> None:
+    explorer = Explorer(minimal)
+    full = str(explorer.read("concepts/architecture.md")["body"])
+
+    pages: list[str] = []
+    link_sets: list[list[dict[str, object]]] = []
+    start: int | None = 0
+    while start is not None:
+        page = explorer.read("concepts/architecture.md", max_chars=25, start_char=start)
+        pages.append(str(page["body"]))
+        link_sets.append(page["links"])
+        assert page["body_total_chars"] == len(full)
+        start = page["next_start"]
+
+    assert "".join(pages) == full
+    assert len(pages) > 1
+    # Every page reports the same, whole-document link set.
+    assert all(links == link_sets[0] for links in link_sets)
+    # The chain terminates exactly at the end of the body.
+    last = explorer.read("concepts/architecture.md", max_chars=25, start_char=len(full) - 5)
+    assert last["truncated"] is False
+    assert last["next_start"] is None
+
+
+def test_read_clamps_out_of_range_offsets(minimal: Path) -> None:
+    explorer = Explorer(minimal)
+    full = str(explorer.read("concepts/architecture.md")["body"])
+    past_end = explorer.read("concepts/architecture.md", start_char=len(full) + 100)
+    assert past_end["body"] == ""
+    assert past_end["truncated"] is False
+    assert past_end["next_start"] is None
+    negative = explorer.read("concepts/architecture.md", max_chars=20, start_char=-7)
+    assert negative["start_char"] == 0
+    assert str(negative["body"]) == full[:20]
 
 
 def test_links_reports_both_directions_bounded(minimal: Path) -> None:
