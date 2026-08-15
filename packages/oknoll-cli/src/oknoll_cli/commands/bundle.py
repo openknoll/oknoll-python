@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import typer
 from okf_core import (
+    ExtractError,
     LintConfig,
     PipelineError,
     RevisionDiffError,
@@ -18,19 +20,32 @@ from okf_core import (
     pack_bundle,
     read_current_revision_id,
     revision_dir,
+    safe_extract_bundle,
 )
 from oknoll_connectors import ConnectorError
 from oknoll_providers import ProviderError
+from oknoll_runtime import (
+    CatalogError,
+    ImageError,
+    InstallError,
+    StoreError,
+    checkout_bundle,
+    install_bundle,
+)
 
 from oknoll_cli.commands.common import (
     STUB_CONTEXT,
     fail,
     load_project,
     not_yet,
+    parse_cli_locator,
     pipeline_sources,
     print_findings,
     print_health,
     provider_for,
+    resolve_installed,
+    runtime_store_catalog,
+    short_digest,
 )
 
 bundle_app = typer.Typer(
@@ -84,8 +99,9 @@ def pack(
     if current is None:
         raise fail("no published revision to pack — run `oknoll project build` first")
 
+    # Canonical pack filename is .okf.tgz; .tar.gz stays accepted on input forever.
     suffix = "" if profile == "okf" else "-plain"
-    archive_name = f"{config.name}-{current}{suffix}.tar.gz"
+    archive_name = f"{config.name}-{current}{suffix}.okf.tgz"
     result = pack_bundle(
         revision_dir(config.bundle_path, current),
         config.root / "dist" / archive_name,
@@ -209,40 +225,140 @@ def _render_revision_diff(report: dict[str, object]) -> None:
     )
 
 
-@bundle_app.command("install", context_settings=STUB_CONTEXT)
-def install() -> None:
-    """Install an existing OKF bundle (directory, archive, or locator) into the local store."""
-    not_yet("bundle install", "the local content store")
+@bundle_app.command("install")
+def install(
+    target: str = typer.Argument(
+        ..., help="Bundle directory or OKF archive to install (remote locators arrive later)."
+    ),
+    name: str = typer.Option(..., "--name", help="Catalog alias to register."),
+    update: bool = typer.Option(
+        False, "--update", help="Atomically repoint the alias if it already exists."
+    ),
+) -> None:
+    """Install an existing OKF bundle into the local content store and catalog."""
+    locator = parse_cli_locator(target)
+    if locator.kind in ("oci", "oknoll"):
+        not_yet("bundle install", "the registry client")
+    if locator.kind in ("bare", "local"):
+        raise fail(f"{target!r} names a catalog alias, not an installable source")
+
+    store, catalog = runtime_store_catalog()
+    try:
+        entry, _record, warnings = install_bundle(
+            store,
+            catalog,
+            Path(locator.path).expanduser(),
+            alias=name,
+            update=update,
+            today=date.today().isoformat(),
+        )
+    except (InstallError, CatalogError, ImageError, StoreError, ExtractError) as exc:
+        raise fail(f"oknoll bundle install: {exc}") from exc
+
+    typer.echo(f"installed {entry.alias}")
+    typer.echo(f"  image     {entry.oci_digest}")
+    typer.echo(f"  revision  {entry.okf_revision}")
+    typer.echo(f"  title     {entry.title}")
+    summary = json.loads(entry.lint_summary) if entry.lint_summary else {}
+    if summary:
+        typer.echo(
+            f"  lint      {summary.get('errors', 0)} error(s), "
+            f"{summary.get('warnings', 0)} warning(s)"
+        )
+    for warning in warnings:
+        typer.secho(f"  ! {warning}", fg=typer.colors.YELLOW)
 
 
-@bundle_app.command("uninstall", context_settings=STUB_CONTEXT)
-def uninstall() -> None:
-    """Remove an installed bundle from the local catalog."""
-    not_yet("bundle uninstall", "the local content store")
+@bundle_app.command("uninstall")
+def uninstall(
+    target: str = typer.Argument(..., help="Catalog alias (or local:<alias>) to remove."),
+) -> None:
+    """Remove an installed bundle from the local catalog (the image stays in the store)."""
+    _, catalog = runtime_store_catalog()
+    entry = resolve_installed(catalog, target)
+    try:
+        catalog.remove(entry.alias)
+    except CatalogError as exc:
+        raise fail(f"oknoll bundle uninstall: {exc}") from exc
+    typer.echo(
+        f"uninstalled {entry.alias} — the image remains in the store "
+        f"(`oknoll image remove {entry.oci_digest[:19]}…` reclaims it)"
+    )
 
 
-@bundle_app.command("list", context_settings=STUB_CONTEXT)
-def list_() -> None:
+@bundle_app.command("list")
+def list_(
+    json_output: bool = typer.Option(False, "--json", help="Emit the catalog as JSON."),
+) -> None:
     """List installed bundles in the local catalog."""
-    not_yet("bundle list", "the local content store")
+    _, catalog = runtime_store_catalog()
+    entries = catalog.list_entries()
+    if json_output:
+        typer.echo(json.dumps([asdict(entry) for entry in entries], indent=2))
+        return
+    if not entries:
+        typer.echo("no bundles installed — `oknoll bundle install <source> --name <alias>`")
+        return
+    for entry in entries:
+        typer.echo(
+            f"{entry.alias:20} {entry.okf_revision:16} "
+            f"{short_digest(entry.oci_digest):22} {entry.title}"
+        )
 
 
-@bundle_app.command("inspect", context_settings=STUB_CONTEXT)
-def inspect() -> None:
-    """Inspect an installed bundle (identity, provenance, contents)."""
-    not_yet("bundle inspect", "the local content store")
+@bundle_app.command("inspect")
+def inspect(
+    target: str = typer.Argument(..., help="Catalog alias (or local:<alias>)."),
+    json_output: bool = typer.Option(False, "--json", help="Emit the entry as JSON."),
+) -> None:
+    """Inspect an installed bundle: identity, provenance, lint summary."""
+    _, catalog = runtime_store_catalog()
+    entry = resolve_installed(catalog, target)
+    if json_output:
+        typer.echo(json.dumps(asdict(entry), indent=2))
+        return
+    typer.echo(f"alias        {entry.alias}")
+    typer.echo(f"mode         {entry.mode}")
+    typer.echo(f"reference    {entry.reference}")
+    typer.echo(f"image        {entry.oci_digest}")
+    typer.echo(f"revision     {entry.okf_revision}")
+    typer.echo(f"title        {entry.title}")
+    if entry.description:
+        typer.echo(f"description  {entry.description}")
+    typer.echo(f"signature    {entry.signature_state}")
+    if entry.lint_summary:
+        typer.echo(f"lint         {entry.lint_summary}")
+    typer.echo(f"installed    {entry.installed_at}")
+    if entry.last_used_at:
+        typer.echo(f"last used    {entry.last_used_at}")
 
 
-@bundle_app.command("checkout", context_settings=STUB_CONTEXT)
-def checkout() -> None:
-    """Materialize a human-visible bundle tree from the local store."""
-    not_yet("bundle checkout", "the local content store")
+@bundle_app.command("checkout")
+def checkout(
+    target: str = typer.Argument(..., help="Catalog alias (or local:<alias>) to materialize."),
+    dest: Path = typer.Argument(..., help="Destination directory (must be empty or absent)."),
+) -> None:
+    """Materialize a human-visible bundle tree pinned to the installed revision."""
+    store, catalog = runtime_store_catalog()
+    entry = resolve_installed(catalog, target)
+    try:
+        checkout_bundle(store, entry, dest)
+    except (InstallError, StoreError) as exc:
+        raise fail(f"oknoll bundle checkout: {exc}") from exc
+    typer.echo(f"checked out {entry.alias} @ {entry.okf_revision} → {dest}")
 
 
-@bundle_app.command("unpack", context_settings=STUB_CONTEXT)
-def unpack() -> None:
-    """Safely extract an OKF archive into a directory."""
-    not_yet("bundle unpack", "the local content store")
+@bundle_app.command("unpack")
+def unpack(
+    archive: Path = typer.Argument(..., help="OKF archive (.okf.tgz, .tar.gz, or .tar)."),
+    dest: Path = typer.Argument(..., help="Destination directory (must not exist)."),
+) -> None:
+    """Safely extract an OKF archive into a directory (no store, no catalog)."""
+    try:
+        result = safe_extract_bundle(archive, dest)
+    except ExtractError as exc:
+        raise fail(f"oknoll bundle unpack: {exc}") from exc
+    typer.echo(f"unpacked {result.file_count} file(s) → {result.dest}")
 
 
 @bundle_app.command("connect", context_settings=STUB_CONTEXT)

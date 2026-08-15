@@ -23,6 +23,7 @@ from oknoll_runtime.installer import (
     InstallError,
     checkout_bundle,
     install_bundle,
+    installed_tree,
     verify_bundle_manifest,
 )
 from oknoll_runtime.locator import Locator, LocatorError, parse_locator, parse_machine_locator
@@ -50,6 +51,7 @@ __all__ = [
     "digest_hex",
     "format_digest",
     "install_bundle",
+    "installed_tree",
     "load_image",
     "parse_locator",
     "parse_machine_locator",

@@ -138,10 +138,8 @@ def _verify_outer_checksum(archive: Path, warnings: list[str]) -> None:
         )
 
 
-def checkout_bundle(store: Store, entry: CatalogEntry, dest: Path) -> Path:
-    """Materialize a human-visible working tree pinned to the installed revision."""
-    if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
-        raise InstallError(f"checkout destination is not an empty directory: {dest}")
+def installed_tree(store: Store, entry: CatalogEntry) -> Path:
+    """The read-only store tree an installed catalog entry points at."""
     manifest = store.read_manifest(entry.oci_digest)
     layers = manifest.get("layers")
     if not isinstance(layers, list) or not layers or not isinstance(layers[0], dict):
@@ -149,6 +147,14 @@ def checkout_bundle(store: Store, entry: CatalogEntry, dest: Path) -> Path:
     tree = store.tree_path(str(layers[0].get("digest", "")))
     if not tree.is_dir():
         raise InstallError(f"content tree for {entry.alias!r} is missing from the store")
+    return tree
+
+
+def checkout_bundle(store: Store, entry: CatalogEntry, dest: Path) -> Path:
+    """Materialize a human-visible working tree pinned to the installed revision."""
+    if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
+        raise InstallError(f"checkout destination is not an empty directory: {dest}")
+    tree = installed_tree(store, entry)
 
     dest.mkdir(parents=True, exist_ok=True)
     try:
