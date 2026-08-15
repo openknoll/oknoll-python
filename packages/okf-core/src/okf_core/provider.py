@@ -23,7 +23,9 @@ from okf_core.canonical import sha256_hex
 #    descriptions — v3 stamps and plans must not pair with the new bodies.
 GENERATOR_VERSION = "4"
 PROMPT_VERSIONS: dict[str, str] = {
-    "concept-description": "1",
+    # 2: input is the concept's section outline (not the first paragraph) and
+    #    the first sentence must stand alone as the index-line summary.
+    "concept-description": "2",
     "concept-plan": "1",
     "reference-description": "1",
     "bundle-description": "1",

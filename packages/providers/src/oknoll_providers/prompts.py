@@ -13,9 +13,12 @@ from typing import Any
 
 _CONCEPT_SYSTEM = (
     "You write short grounded descriptions for concepts in a knowledge bundle. "
-    "Use only the excerpt you are given — never invent facts, names, or numbers "
-    "that are not in it. Reply with one to three plain prose sentences and "
-    "nothing else: no headings, no lists, no preamble."
+    "You are given the concept's title and an outline of its sections. Use only "
+    "the material given — never invent facts, names, or numbers that are not in "
+    "it. Reply with one to three plain prose sentences and nothing else: no "
+    "headings, no lists, no preamble. The first sentence must stand alone as a "
+    "one-line summary of the whole concept, roughly 8 to 30 words; later "
+    "sentences may add scope, caveats, or key details."
 )
 
 _PLAN_SYSTEM = (
@@ -60,8 +63,8 @@ def render(prompt_id: str, payload: dict[str, Any]) -> tuple[str, str]:
     """Return the (system, user) prompt pair for a named okf-core prompt id."""
     if prompt_id == "concept-description":
         title = str(payload.get("title", "")).strip() or "this concept"
-        excerpt = str(payload.get("excerpt", "")).strip()
-        user = f"Concept title: {title}\n\nSource excerpt:\n{excerpt}"
+        outline = str(payload.get("outline", "")).strip() or "(no outline)"
+        user = f"Concept title: {title}\n\nSection outline:\n{outline}"
         return _CONCEPT_SYSTEM, user
     if prompt_id == "concept-plan":
         title = str(payload.get("title", "")).strip() or "(untitled document)"

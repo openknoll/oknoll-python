@@ -188,6 +188,31 @@ def test_run_report_counts_the_new_prompts(tmp_path: Path) -> None:
     assert len(provider.calls) == calls_before
 
 
+def test_description_input_covers_later_sections(tmp_path: Path) -> None:
+    """The concept-description prompt sees the whole section outline, not just
+    the first paragraph (regression: descriptions used to be generated from the
+    opening 400 chars only)."""
+
+    class CapturingProvider(StubModelProvider):
+        id = "capturing"
+
+        def __init__(self) -> None:
+            self.payloads: list[dict[str, Any]] = []
+
+        def complete(self, prompt_id: str, payload: dict[str, Any]) -> str:
+            if prompt_id == "concept-description":
+                self.payloads.append(payload)
+            return super().complete(prompt_id, payload)
+
+    provider = CapturingProvider()
+    _write_sources(tmp_path, {"guide.md": GUIDE_MD})
+    _build(tmp_path, provider)
+    assert provider.payloads
+    outline = str(provider.payloads[0]["outline"])
+    assert "Setup" in outline  # a later section's heading reaches the model
+    assert "Install the toolchain" in outline
+
+
 def test_empty_bundle_keeps_placeholder_description(tmp_path: Path) -> None:
     (tmp_path / "sources").mkdir()
     outcome = _build(tmp_path, RaisingProvider())  # no sources → no model calls

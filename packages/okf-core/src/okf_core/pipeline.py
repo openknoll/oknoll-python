@@ -201,6 +201,7 @@ RELATED_MAX_LINKS = 5
 # root index stays a scannable router; the reference/bundle description prompts
 # see bounded, link-stripped material only.
 INDEX_LINE_CHARS = 200
+DESCRIPTION_INPUT_CHARS = 3_000
 REFERENCE_DESC_INPUT_CHARS = 3_000
 REFERENCE_DESC_CHARS = 300
 BUNDLE_DESC_MAX_CONCEPTS = 40
@@ -670,8 +671,11 @@ def _generated_fields(
     cached = cache.generated(key)
     if cached is not None:
         return cached
-    excerpt = _strip_links(next((b.text for b in doc.blocks if b.kind == "paragraph"), ""))[:400]
-    payload = {"title": doc.title, "excerpt": excerpt, "content_hash": doc.content_hash()}
+    # The model sees the concept's whole outline (already link-stripped and
+    # per-entry bounded by the digest machinery), not just the first paragraph:
+    # a description must be able to mention what later sections cover.
+    outline = "\n\n".join(_section_digest(doc))[:DESCRIPTION_INPUT_CHARS]
+    payload = {"title": doc.title, "outline": outline, "content_hash": doc.content_hash()}
     description = _complete(provider, "concept-description", payload, doc.title)
     model = _served_model(provider)
     # generated_at is keyed without generation_version and fingerprinted by the
