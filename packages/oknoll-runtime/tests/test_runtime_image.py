@@ -31,6 +31,20 @@ def test_build_twice_yields_the_same_manifest_digest(tmp_path: Path) -> None:
     assert first.config_digest == second.config_digest
 
 
+# Published image identity is contractual (ADR: layer digest over compressed
+# pack bytes; canonical-JSON config/manifest). CI runs this on ubuntu and
+# macos: a legitimate change to the packer, config schema, or manifest shape
+# moves this pin deliberately — a cross-OS mismatch is a release blocker.
+GOLDEN_MINIMAL_MANIFEST_DIGEST = (
+    "sha256:2c7fda7837b97f66ca0d6f1d816ff7ceeb5d646c3425d8aa9819b3a91094effa"
+)
+
+
+def test_image_digest_is_pinned_cross_os(tmp_path: Path) -> None:
+    record = build_image_from_tree(Store(tmp_path / "data"), GOLDEN)
+    assert record.manifest_digest == GOLDEN_MINIMAL_MANIFEST_DIGEST
+
+
 def test_manifest_shape_and_annotations(tmp_path: Path) -> None:
     store = Store(tmp_path / "data")
     record = build_image_from_tree(store, GOLDEN)
