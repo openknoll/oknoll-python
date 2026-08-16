@@ -225,16 +225,29 @@ def _digest_text(text: str) -> str:
     return " ".join(_FOOTNOTE_TOKEN_RE.sub("", _strip_links(text)).split())
 
 
+# The description prompts demand plain prose; a list-shaped reply is still
+# usable once its per-line markers are dropped — the item texts read as prose.
+_LIST_MARKER_RE = re.compile(r"^\s*(?:[-*+•]|\d{1,3}[.)])\s+", re.MULTILINE)
+
+
+def _prose_text(text: str) -> str:
+    """Model prose normalized for description fields: per-line list markers
+    dropped (must happen before whitespace collapse loses the line starts),
+    then link-stripped and whitespace-collapsed (``_digest_text``). Idempotent,
+    so re-validating cached values is safe."""
+    return _digest_text(_LIST_MARKER_RE.sub("", text))
+
+
 def _index_line(text: str) -> str:
     """First sentence of a description, sanitized for a root-index bullet.
 
-    Model descriptions render inside index bullets, so the text is link-stripped
-    and whitespace-collapsed (``_digest_text``) — a hostile description can never
-    smuggle a live link or newline into the index — then cut at the first
-    sentence boundary and length-capped.
+    Model descriptions render inside index bullets, so the text is normalized
+    (``_prose_text``) — a hostile description can never smuggle a live link or
+    newline into the index — then cut at the first sentence boundary and
+    length-capped at a word boundary.
     """
-    first = _SENTENCE_SPLIT_RE.split(_digest_text(text), maxsplit=1)[0]
-    return first[:INDEX_LINE_CHARS].strip()
+    first = _SENTENCE_SPLIT_RE.split(_prose_text(text), maxsplit=1)[0]
+    return indexing.clip_words(first.strip(), INDEX_LINE_CHARS)
 
 
 def _section_digest(doc: CanonicalDoc) -> list[str]:
@@ -672,14 +685,14 @@ def _reference_description(
         ]
         payload = {"title": unit.title, "outline": outline}
         raw = _complete(provider, "reference-description", payload, unit.title)
-        cached = {
-            "description": _digest_text(raw)[:REFERENCE_DESC_CHARS].strip(),
-            "model": _served_model(provider),
-        }
+        # The cache keeps the raw reply (like concept-description): sanitization
+        # is deterministic on the way out, so improving it re-renders cached
+        # values without a regeneration.
+        cached = {"description": raw, "model": _served_model(provider)}
         cache.store_generated(key, cached)
-    # Re-validate on the way out: the cache is derived state and may be foreign.
+    # Sanitize on the way out: the cache is derived state and may be foreign.
     description = str(cached.get("description", "")) if isinstance(cached, dict) else ""
-    description = _digest_text(description)[:REFERENCE_DESC_CHARS].strip()
+    description = indexing.clip_words(_prose_text(description).strip(), REFERENCE_DESC_CHARS)
     return description or f"Acquired source snapshot: {unit.title}."
 
 
@@ -785,10 +798,11 @@ def _write_concept(
     doc, unit = plan.doc, plan.unit
     generated = _generated_fields(doc, provider, cache, clock, generation_version)
     # The description is model output rendered into the bundle body and
-    # frontmatter: link-strip and collapse it like every other model field so
-    # it can never smuggle a live link past lint (the cache keeps the raw
-    # reply; sanitization is deterministic on the way out).
-    description = _digest_text(str(generated["description"]))
+    # frontmatter: normalize it like every other model field so it can never
+    # smuggle a live link past lint and a list-shaped reply still reads as
+    # prose (the cache keeps the raw reply; normalization is deterministic on
+    # the way out).
+    description = _prose_text(str(generated["description"]))
 
     frontmatter = Frontmatter(
         data={
@@ -863,14 +877,13 @@ def _bundle_description(
     cached = cache.generated(key)
     if cached is None:
         raw = _complete(provider, "bundle-description", payload, project_name)
-        cached = {
-            "description": _digest_text(raw)[:BUNDLE_DESC_CHARS].strip(),
-            "model": _served_model(provider),
-        }
+        # Raw reply cached; sanitization is deterministic on the way out (see
+        # _reference_description).
+        cached = {"description": raw, "model": _served_model(provider)}
         cache.store_generated(key, cached)
-    # Re-validate on the way out: the cache is derived state and may be foreign.
+    # Sanitize on the way out: the cache is derived state and may be foreign.
     description = str(cached.get("description", "")) if isinstance(cached, dict) else ""
-    description = _digest_text(description)[:BUNDLE_DESC_CHARS].strip()
+    description = indexing.clip_words(_prose_text(description).strip(), BUNDLE_DESC_CHARS)
     if description:
         return description
     covered = ", ".join(plan.doc.title for plan in ordered[:5])

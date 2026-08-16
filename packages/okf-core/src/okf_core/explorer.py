@@ -260,7 +260,9 @@ class Explorer:
             frontmatter, _ = self._parse(file.rel_path)
             entry_description = frontmatter.description if frontmatter else None
             if entry_description is not None:
-                entry_description = entry_description[:MAX_OVERVIEW_DESCRIPTION_CHARS]
+                entry_description = indexing.clip_words(
+                    entry_description, MAX_OVERVIEW_DESCRIPTION_CHARS
+                )
             toc.append(
                 {
                     "path": file.rel_path,
