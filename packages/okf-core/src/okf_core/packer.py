@@ -29,6 +29,11 @@ from okf_core.frontmatter import (
 
 PROFILES: tuple[str, ...] = ("okf", "plain")
 
+
+class ArchiveError(ValueError):
+    """Unsafe member, corrupt archive, or checksum mismatch."""
+
+
 # Frontmatter keys that carry OKF machinery rather than plain document content.
 _OKF_ONLY_KEYS: frozenset[str] = frozenset(
     {"okf_version", "type", "status", "generated", "verified", "sources", "stale_after"}
@@ -128,3 +133,45 @@ def pack_bundle(
         sha256=digest,
         file_count=len(entries),
     )
+
+
+def verify_archive_checksum(archive_path: Path) -> str | None:
+    """Verify the ``<name>.sha256`` sidecar; return the digest, or None if absent."""
+    checksum_path = archive_path.with_name(archive_path.name + ".sha256")
+    if not checksum_path.is_file():
+        return None
+    parts = checksum_path.read_text(encoding="utf-8").split()
+    if len(parts) != 2:
+        raise ArchiveError(f"unparseable checksum file: {checksum_path}")
+    digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    if digest != parts[0]:
+        raise ArchiveError(
+            f"checksum mismatch for {archive_path.name}: expected {parts[0]}, got {digest}"
+        )
+    return digest
+
+
+def extract_archive(archive_path: Path, dest_dir: Path) -> Path:
+    """Safely extract a packed bundle archive; return the extracted tree root.
+
+    Members go through tarfile's ``data`` filter (absolute paths, traversal,
+    and links escaping the destination are all rejected). When the archive
+    holds exactly one top-level directory — pack's ``member_root`` — that
+    directory is returned; otherwise ``dest_dir`` itself.
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        with tarfile.open(archive_path, mode="r:gz") as tar:
+            tar.extractall(dest_dir, filter="data")
+    except (tarfile.TarError, OSError, EOFError) as exc:  # EOFError: truncated gzip
+        raise ArchiveError(f"cannot extract {archive_path.name}: {exc}") from exc
+
+    resolved_dest = dest_dir.resolve()
+    for extracted in dest_dir.rglob("*"):
+        if not extracted.resolve().is_relative_to(resolved_dest):
+            raise ArchiveError(f"archive member escapes destination: {extracted}")
+
+    entries = list(dest_dir.iterdir())
+    if len(entries) == 1 and entries[0].is_dir():
+        return entries[0]
+    return dest_dir
