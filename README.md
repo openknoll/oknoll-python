@@ -237,6 +237,29 @@ keeping the command in the file. And the CLI merges an install-level config at
 `~/.mcp-inspector/mcp.json` — passing `--config` with an explicit `--server oknoll` keeps
 the run deterministic regardless of what is stored there.
 
+### Adopt someone else's bundle
+
+A bundle you received — an `oknoll pack` archive or any OKF tree another tool
+produced — can be adopted as a project of your own, or used in place without
+copying anything:
+
+```sh
+# Adopt: unpack (verified against the .sha256 sidecar when present), lint, and
+# publish the tree as the project's first immutable revision.
+oknoll init imported --from acme-retail.tar.gz   # or --from ./their-bundle/
+cd imported && oknoll ask "what is gross margin?"
+
+# Zero-copy: ask/chat/serve straight off a foreign bundle directory —
+# no project, no published revision required.
+oknoll ask --bundle ./their-bundle "what is gross margin?"
+oknoll chat --bundle ./their-bundle
+```
+
+Import is lint-gated: a source that fails validation publishes nothing (serve it
+read-only with `oknoll serve --mcp --bundle <dir>` instead). An imported project
+starts with zero registered sources, so `oknoll build` refuses to run — and
+cannot overwrite the imported content — until you `oknoll add` sources.
+
 ### Chat interactively
 
 `oknoll chat` is a single-bundle REPL over the same explorer, pinned to the current
