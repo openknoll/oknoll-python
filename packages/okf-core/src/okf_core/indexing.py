@@ -107,6 +107,21 @@ _STOPWORDS = frozenset(
 _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 _MAX_QUERY_TERMS = 12
 
+
+def clip_words(text: str, cap: int) -> str:
+    """Length-cap prose at a word boundary, marking the cut with an ellipsis.
+
+    A mid-word cut ("…such as M") reads like corruption wherever the clipped
+    text is shown — index lines, overview entries, search hits. The result is
+    always ≤ ``cap`` chars and the helper is idempotent, so re-validating
+    cached values never re-clips.
+    """
+    if len(text) <= cap:
+        return text
+    clipped = text[: cap - 1].rsplit(" ", 1)[0].rstrip(" ,;:—-")
+    return clipped + "…" if clipped else text[: cap - 1] + "…"
+
+
 # Process-local memo of indexes built outside a read-only bundle, so repeated
 # exploration of the same foreign bundle does not rebuild every time.
 _FALLBACK_INDEXES: dict[tuple[str, str], Path] = {}
@@ -330,7 +345,7 @@ def search_index(index_dir: Path, query: str, *, limit: int = 10) -> list[Search
             path=str(path),
             kind=str(kind),
             title=str(title),
-            description=str(description)[:MAX_HIT_DESCRIPTION_CHARS],
+            description=clip_words(str(description), MAX_HIT_DESCRIPTION_CHARS),
             snippet=str(snip),
             score=round(float(score), 6),
         )
