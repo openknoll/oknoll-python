@@ -2,16 +2,16 @@
 # Distribution name is `oknoll` (uv tool install oknoll); the import package
 # stays `oknoll_cli` and the directory keeps its historical name.
 name = "oknoll"
-version = "0.3.4"
+version = "0.3.5"
 description = "oknoll: local-first CLI for building, linting, exploring, and packing OKF bundles"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 readme = "README.md"
 dependencies = [
-    "okf-core==0.3.4",
-    "oknoll-connectors==0.3.4",
-    "oknoll-eval==0.3.4",
-    "oknoll-providers==0.3.4",
+    "okf-core==0.3.5",
+    "oknoll-connectors==0.3.5",
+    "oknoll-eval==0.3.5",
+    "oknoll-providers==0.3.5",
     "typer>=0.15",
     "mcp>=1.9",
 ]

@@ -188,14 +188,34 @@ _DIGEST_PROSE_KINDS = frozenset({"paragraph", "quote", "list"})
 
 # Concept-plan bounds: the model only groups outline sections and names the
 # groups — it never contributes body text, and a plan outside these bounds is
-# discarded in favor of one concept per document.
+# discarded in favor of one concept per document. An oversized single-section
+# slice may be re-planned once at the next heading level (bounded recursion),
+# so a document whose topics hide under one huge section still splits.
 PLAN_MAX_CONCEPTS = 12
-PLAN_SNIPPET_CHARS = 200
+PLAN_SNIPPET_CHARS = 400
 PLAN_TITLE_CHARS = 120
+PLAN_SUBHEADINGS_MAX = 8
+PLAN_SUBHEADING_CHARS = 100
+SPLIT_THRESHOLD_CHARS = 6_000
+PLAN_MAX_DEPTH = 1
+PLAN_MAX_CONCEPTS_TOTAL = 24
 
 # Cross-concept references per concept; capped like the explorer's link fan-out
 # so one hub concept cannot dominate navigation.
 RELATED_MAX_LINKS = 5
+
+# Self-describing bundle bounds. Index entry lines carry one sentence so the
+# root index stays a scannable router; the reference/bundle description prompts
+# see bounded, link-stripped material only.
+INDEX_LINE_CHARS = 200
+DESCRIPTION_INPUT_CHARS = 3_000
+REFERENCE_DESC_INPUT_CHARS = 3_000
+REFERENCE_DESC_CHARS = 300
+BUNDLE_DESC_MAX_CONCEPTS = 40
+BUNDLE_DESC_PAYLOAD_CHARS = 6_000
+BUNDLE_DESC_CHARS = 500
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s")
 
 
 def _digest_text(text: str) -> str:
@@ -203,6 +223,31 @@ def _digest_text(text: str) -> str:
     # it into the digest) and a leading `[^id]:` could forge a definition that
     # shadows the generated provenance footnote.
     return " ".join(_FOOTNOTE_TOKEN_RE.sub("", _strip_links(text)).split())
+
+
+# The description prompts demand plain prose; a list-shaped reply is still
+# usable once its per-line markers are dropped — the item texts read as prose.
+_LIST_MARKER_RE = re.compile(r"^\s*(?:[-*+•]|\d{1,3}[.)])\s+", re.MULTILINE)
+
+
+def _prose_text(text: str) -> str:
+    """Model prose normalized for description fields: per-line list markers
+    dropped (must happen before whitespace collapse loses the line starts),
+    then link-stripped and whitespace-collapsed (``_digest_text``). Idempotent,
+    so re-validating cached values is safe."""
+    return _digest_text(_LIST_MARKER_RE.sub("", text))
+
+
+def _index_line(text: str) -> str:
+    """First sentence of a description, sanitized for a root-index bullet.
+
+    Model descriptions render inside index bullets, so the text is normalized
+    (``_prose_text``) — a hostile description can never smuggle a live link or
+    newline into the index — then cut at the first sentence boundary and
+    length-capped at a word boundary.
+    """
+    first = _SENTENCE_SPLIT_RE.split(_prose_text(text), maxsplit=1)[0]
+    return indexing.clip_words(first.strip(), INDEX_LINE_CHARS)
 
 
 def _section_digest(doc: CanonicalDoc) -> list[str]:
@@ -373,11 +418,59 @@ def _validate_plan(concepts: Any, section_count: int) -> list[dict[str, Any]] | 
     return plan
 
 
+def _subheadings(section_blocks: list[Block]) -> list[str]:
+    """Digest-cleaned next-level headings inside one section (bounded)."""
+    levels = [b.level or 1 for b in section_blocks[1:] if b.kind == "heading"]
+    if not levels:
+        return []
+    sub_level = min(levels)
+    return [
+        _digest_text(b.text)[:PLAN_SUBHEADING_CHARS]
+        for b in section_blocks[1:]
+        if b.kind == "heading" and (b.level or 1) == sub_level
+    ][:PLAN_SUBHEADINGS_MAX]
+
+
+def _split_candidate(
+    doc: CanonicalDoc,
+    entry: dict[str, Any],
+    preamble: list[Block],
+    sections: list[tuple[str, list[Block]]],
+) -> CanonicalDoc | None:
+    """A sub-document to re-plan, when one slice is a single oversized section.
+
+    Only a slice that is exactly one section qualifies (a grouped slice was a
+    deliberate model decision), the preamble must not ride along (splitting
+    would drop it), the rendered text must exceed the threshold, and the
+    section must actually contain enough next-level structure to plan over.
+    The sub-document drops the section heading, so ``_split_sections``'s
+    adaptive level segments it at the next heading level unchanged.
+    """
+    if len(entry["sections"]) != 1:
+        return None
+    [index] = entry["sections"]
+    if index == 0 and preamble:
+        return None
+    heading, section_blocks = sections[index]
+    if len(render_blocks(section_blocks)) <= SPLIT_THRESHOLD_CHARS:
+        return None
+    title = _digest_text(heading)[:PLAN_TITLE_CHARS].strip()
+    if not title:
+        return None
+    sub_doc = replace(doc, title=title, blocks=tuple(section_blocks[1:]))
+    _, sub_sections = _split_sections(sub_doc)
+    if len(sub_sections) < 3:
+        return None
+    return sub_doc
+
+
 def _planned_docs(
     doc: CanonicalDoc,
     provider: ModelProvider,
     cache: BuildCache,
     generation_version: str,
+    *,
+    depth: int = 0,
 ) -> list[CanonicalDoc]:
     """Bounded model split of one document into concept slices.
 
@@ -385,6 +478,10 @@ def _planned_docs(
     content hash so rebuilds replay it byte-for-byte and ``diff --check`` stays
     green behind a nondeterministic model. The model sees only link-stripped
     outline text and contributes only boundaries and titles, never body text.
+    An oversized single-section slice is re-planned once at the next heading
+    level (``PLAN_MAX_DEPTH``); each sub-plan is a separately cached decision
+    keyed by the sub-document's content, and the total slice count per source
+    document is capped at ``PLAN_MAX_CONCEPTS_TOTAL`` in plan order.
     """
     preamble, sections = _split_sections(doc)
     if len(sections) < 2:
@@ -407,6 +504,7 @@ def _planned_docs(
                     "snippet": _digest_text(
                         next((b.text for b in blocks if b.kind in _DIGEST_PROSE_KINDS), "")
                     )[:PLAN_SNIPPET_CHARS],
+                    "subheadings": _subheadings(blocks),
                 }
                 for i, (heading, blocks) in enumerate(sections)
             ],
@@ -430,15 +528,30 @@ def _planned_docs(
     if not plan:
         return [doc]
 
-    slices: list[CanonicalDoc] = []
-    for entry in plan:
+    out: list[CanonicalDoc] = []
+    for position, entry in enumerate(plan):
         slice_blocks: list[Block] = []
         if 0 in entry["sections"]:
             slice_blocks.extend(preamble)
         for index in entry["sections"]:
             slice_blocks.extend(sections[index][1])
-        slices.append(replace(doc, title=entry["title"], blocks=tuple(slice_blocks)))
-    return slices
+        slice_doc = replace(doc, title=entry["title"], blocks=tuple(slice_blocks))
+
+        if depth < PLAN_MAX_DEPTH:
+            sub_doc = _split_candidate(doc, entry, preamble, sections)
+            if sub_doc is not None:
+                sub_slices = _planned_docs(
+                    sub_doc, provider, cache, generation_version, depth=depth + 1
+                )
+                remaining = len(plan) - position - 1
+                if (
+                    len(sub_slices) > 1
+                    and len(out) + len(sub_slices) + remaining <= PLAN_MAX_CONCEPTS_TOTAL
+                ):
+                    out.extend(sub_slices)
+                    continue
+        out.append(slice_doc)
+    return out
 
 
 def _plan(
@@ -532,20 +645,69 @@ def _generate(
     cache: BuildCache,
     clock: Callable[[], str],
     generation_version: str,
-) -> None:
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Write references and concepts; return their descriptions keyed by bundle
+    path (``concepts_by_path, references_by_path``) so the link stage can build
+    a descriptive index without re-asking the provider."""
     related = _related_links(plans)
+    reference_descriptions: dict[str, str] = {}
     for unit in units:
-        _write_reference_snapshot(stage, unit)
+        reference_descriptions[unit.ref_path] = _write_reference_snapshot(
+            stage, unit, provider, cache, generation_version
+        )
+    concept_descriptions: dict[str, str] = {}
     for plan in plans:
-        _write_concept(
+        concept_descriptions[plan.concept_path] = _write_concept(
             stage, plan, provider, cache, clock, generation_version, related[plan.concept_path]
         )
+    return concept_descriptions, reference_descriptions
 
 
-def _write_reference_snapshot(stage: Path, unit: _SourceUnit) -> None:
+def _reference_description(
+    unit: _SourceUnit,
+    provider: ModelProvider,
+    cache: BuildCache,
+    generation_version: str,
+) -> str:
+    """One-sentence description of an acquired source, cached like every other
+    model-generated field; unusable output falls back deterministically and the
+    fallback decision is cached."""
+    key = generation_cache_key(
+        content_hash=sha256_hex("\x00".join(doc.content_hash() for doc in unit.docs)),
+        prompt_id="reference-description",
+        provider_id=provider.id,
+        generation_version=generation_version,
+    )
+    cached = cache.generated(key)
+    if cached is None:
+        outline = "\n\n".join(part for doc in unit.docs for part in _section_digest(doc))[
+            :REFERENCE_DESC_INPUT_CHARS
+        ]
+        payload = {"title": unit.title, "outline": outline}
+        raw = _complete(provider, "reference-description", payload, unit.title)
+        # The cache keeps the raw reply (like concept-description): sanitization
+        # is deterministic on the way out, so improving it re-renders cached
+        # values without a regeneration.
+        cached = {"description": raw, "model": _served_model(provider)}
+        cache.store_generated(key, cached)
+    # Sanitize on the way out: the cache is derived state and may be foreign.
+    description = str(cached.get("description", "")) if isinstance(cached, dict) else ""
+    description = indexing.clip_words(_prose_text(description).strip(), REFERENCE_DESC_CHARS)
+    return description or f"Acquired source snapshot: {unit.title}."
+
+
+def _write_reference_snapshot(
+    stage: Path,
+    unit: _SourceUnit,
+    provider: ModelProvider,
+    cache: BuildCache,
+    generation_version: str,
+) -> str:
+    description = _reference_description(unit, provider, cache, generation_version)
     frontmatter = Frontmatter(
         data={
             "title": unit.title,
+            "description": description,
             "openknoll_source": {
                 "connector": unit.connector_id,
                 "connector_version": unit.connector_version,
@@ -558,6 +720,7 @@ def _write_reference_snapshot(stage: Path, unit: _SourceUnit) -> None:
     )
     body = "\n\n".join(rendered for doc in unit.docs if (rendered := render_blocks(doc.blocks)))
     _write_file(stage / unit.ref_path, write_document(ParsedDocument(frontmatter, body)))
+    return description
 
 
 def _complete(provider: ModelProvider, prompt_id: str, payload: dict[str, Any], title: str) -> str:
@@ -596,8 +759,11 @@ def _generated_fields(
     cached = cache.generated(key)
     if cached is not None:
         return cached
-    excerpt = _strip_links(next((b.text for b in doc.blocks if b.kind == "paragraph"), ""))[:400]
-    payload = {"title": doc.title, "excerpt": excerpt, "content_hash": doc.content_hash()}
+    # The model sees the concept's whole outline (already link-stripped and
+    # per-entry bounded by the digest machinery), not just the first paragraph:
+    # a description must be able to mention what later sections cover.
+    outline = "\n\n".join(_section_digest(doc))[:DESCRIPTION_INPUT_CHARS]
+    payload = {"title": doc.title, "outline": outline, "content_hash": doc.content_hash()}
     description = _complete(provider, "concept-description", payload, doc.title)
     model = _served_model(provider)
     # generated_at is keyed without generation_version and fingerprinted by the
@@ -628,10 +794,15 @@ def _write_concept(
     clock: Callable[[], str],
     generation_version: str,
     related: list[ConceptPlan],
-) -> None:
+) -> str:
     doc, unit = plan.doc, plan.unit
     generated = _generated_fields(doc, provider, cache, clock, generation_version)
-    description = str(generated["description"])
+    # The description is model output rendered into the bundle body and
+    # frontmatter: normalize it like every other model field so it can never
+    # smuggle a live link past lint and a list-shaped reply still reads as
+    # prose (the cache keeps the raw reply; normalization is deterministic on
+    # the way out).
+    description = _prose_text(str(generated["description"]))
 
     frontmatter = Frontmatter(
         data={
@@ -654,21 +825,105 @@ def _write_concept(
 
     body = "\n\n".join(sections)
     _write_file(stage / plan.concept_path, write_document(ParsedDocument(frontmatter, body)))
+    return description
 
 
-def _link(stage: Path, project_name: str, plans: list[ConceptPlan]) -> None:
-    """Generate the root index with bundle-root-absolute links."""
+def _bundle_description(
+    project_name: str,
+    plans: list[ConceptPlan],
+    concept_descriptions: dict[str, str],
+    provider: ModelProvider,
+    cache: BuildCache,
+    generation_version: str,
+) -> str:
+    """Bundle-level description for the root index, from concept/reference
+    titles and descriptions only.
+
+    The cache content hash is the hash of the payload itself — a pure function
+    of the ordered per-concept content — so rebuilds replay the decision and
+    ``diff --check`` stays green. Unusable output falls back deterministically
+    and the fallback decision is cached.
+    """
+    if not plans:
+        return f"OKF bundle for {project_name}."
+
+    ordered = sorted(plans, key=lambda p: p.concept_path)
+    concepts: list[dict[str, str]] = [
+        {
+            "title": plan.doc.title,
+            "description": _index_line(concept_descriptions.get(plan.concept_path, "")),
+        }
+        for plan in ordered[:BUNDLE_DESC_MAX_CONCEPTS]
+    ]
+    seen_refs: dict[str, str] = {}
+    for plan in ordered:
+        seen_refs.setdefault(plan.unit.ref_path, plan.unit.title)
+    references = [title for _, title in sorted(seen_refs.items())]
+    payload = {"name": project_name, "concepts": concepts, "references": references}
+    if len(json.dumps(payload)) > BUNDLE_DESC_PAYLOAD_CHARS:
+        # Over budget: drop descriptions first, then trim entries, Google-style.
+        concepts = [{"title": entry["title"]} for entry in concepts]
+        payload = {"name": project_name, "concepts": concepts, "references": references}
+        while concepts and len(json.dumps(payload)) > BUNDLE_DESC_PAYLOAD_CHARS:
+            concepts.pop()
+            payload = {"name": project_name, "concepts": concepts, "references": references}
+
+    key = generation_cache_key(
+        content_hash=sha256_hex(json.dumps(payload, sort_keys=True)),
+        prompt_id="bundle-description",
+        provider_id=provider.id,
+        generation_version=generation_version,
+    )
+    cached = cache.generated(key)
+    if cached is None:
+        raw = _complete(provider, "bundle-description", payload, project_name)
+        # Raw reply cached; sanitization is deterministic on the way out (see
+        # _reference_description).
+        cached = {"description": raw, "model": _served_model(provider)}
+        cache.store_generated(key, cached)
+    # Sanitize on the way out: the cache is derived state and may be foreign.
+    description = str(cached.get("description", "")) if isinstance(cached, dict) else ""
+    description = indexing.clip_words(_prose_text(description).strip(), BUNDLE_DESC_CHARS)
+    if description:
+        return description
+    covered = ", ".join(plan.doc.title for plan in ordered[:5])
+    return (
+        f"Knowledge bundle for {project_name}: {len(plans)} concept(s) from "
+        f"{len(seen_refs)} source(s), covering {covered}."
+    )
+
+
+def _index_entry(title: str, path: str, description: str) -> str:
+    line = _index_line(description)
+    link = f"- [{title}](/{path})"
+    return f"{link} - {line}" if line else link
+
+
+def _link(
+    stage: Path,
+    project_name: str,
+    plans: list[ConceptPlan],
+    concept_descriptions: dict[str, str],
+    reference_descriptions: dict[str, str],
+    bundle_description: str,
+) -> None:
+    """Generate the root index: bundle-root-absolute links, each entry carrying
+    a one-sentence sanitized description (see ``_index_line``)."""
     frontmatter = Frontmatter(
         data={
             "okf_version": "0.2",
             "title": project_name,
-            "description": f"OKF bundle for {project_name}.",
+            "description": bundle_description,
         }
     )
     lines = [f"# {project_name}"]
     if plans:
         concept_links = "\n".join(
-            f"- [{plan.doc.title}](/{plan.concept_path})"
+            _index_entry(
+                plan.doc.title,
+                plan.concept_path,
+                concept_descriptions.get(plan.concept_path, ""),
+            )
             for plan in sorted(plans, key=lambda p: p.concept_path)
         )
         lines.append(f"## Concepts\n\n{concept_links}")
@@ -676,7 +931,8 @@ def _link(stage: Path, project_name: str, plans: list[ConceptPlan]) -> None:
         for plan in plans:
             seen_refs.setdefault(plan.unit.ref_path, plan.unit.title)
         reference_links = "\n".join(
-            f"- [{title}](/{ref_path})" for ref_path, title in sorted(seen_refs.items())
+            _index_entry(title, ref_path, reference_descriptions.get(ref_path, ""))
+            for ref_path, title in sorted(seen_refs.items())
         )
         lines.append(f"## References\n\n{reference_links}")
     else:
@@ -722,14 +978,19 @@ def build_revision(
     try:
         units = _acquire_and_normalize(sources, cache)
         plans = _plan(units, provider, cache, generation_version)
-        _generate(stage, units, plans, provider, cache, clock, generation_version)
+        concept_descriptions, reference_descriptions = _generate(
+            stage, units, plans, provider, cache, clock, generation_version
+        )
+        description = _bundle_description(
+            project_name, plans, concept_descriptions, provider, cache, generation_version
+        )
     except Exception:
         # A failed build (e.g. one refused model call) must not discard the
         # model decisions that already succeeded: the cache is content-keyed,
         # so persisting it is always safe and makes a retry incremental.
         cache.save()
         raise
-    _link(stage, project_name, plans)
+    _link(stage, project_name, plans, concept_descriptions, reference_descriptions, description)
 
     revision_id = compute_revision_id(stage)
     current = read_current_revision_id(bundle_dir)
