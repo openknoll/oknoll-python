@@ -30,9 +30,17 @@ from okf_core.frontmatter import (
     parse_document,
     write_document,
 )
+from okf_core.importer import BundleImportError, ImportOutcome, import_bundle
 from okf_core.indexing import build_link_graph, ensure_index, search_index, write_index
 from okf_core.lint import LintConfig, lint_bundle
-from okf_core.packer import PackResult, pack_bundle, strip_okf_fields
+from okf_core.packer import (
+    ArchiveError,
+    PackResult,
+    extract_archive,
+    pack_bundle,
+    strip_okf_fields,
+    verify_archive_checksum,
+)
 from okf_core.pipeline import (
     BuildOutcome,
     PipelineError,
@@ -60,10 +68,12 @@ __all__ = [
     "KNOWN_KEY_ORDER",
     "STATUS_VALUES",
     "Anchor",
+    "ArchiveError",
     "AskResult",
     "Block",
     "BuildCache",
     "BuildOutcome",
+    "BundleImportError",
     "CanonicalDoc",
     "Citation",
     "EmbeddingProvider",
@@ -74,6 +84,7 @@ __all__ = [
     "FrontmatterError",
     "FrontmatterShapeError",
     "FrontmatterYamlError",
+    "ImportOutcome",
     "Level",
     "Link",
     "LintConfig",
@@ -97,8 +108,10 @@ __all__ = [
     "check_reproducibility",
     "diff_revisions",
     "ensure_index",
+    "extract_archive",
     "generation_cache_key",
     "generation_timestamp_key",
+    "import_bundle",
     "lint_bundle",
     "pack_bundle",
     "parse_document",
@@ -110,6 +123,7 @@ __all__ = [
     "search_index",
     "sha256_hex",
     "strip_okf_fields",
+    "verify_archive_checksum",
     "write_document",
     "write_index",
     "write_trace",
