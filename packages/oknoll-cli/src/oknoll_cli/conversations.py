@@ -29,7 +29,7 @@ class ConversationError(ValueError):
 class Conversation:
     id: str
     path: Path
-    revision_id: str
+    revision_id: str | None  # None: unpinned (foreign bundle with no revision)
     mode: str
     turns: int
 
@@ -44,7 +44,7 @@ def _path(bundle: Path, conversation_id: str) -> Path:
     return _dir(bundle) / f"{conversation_id}.jsonl"
 
 
-def create(bundle: Path, *, revision_id: str, mode: str) -> Conversation:
+def create(bundle: Path, *, revision_id: str | None, mode: str) -> Conversation:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     conversation_id = f"chat-{stamp}-{secrets.token_hex(2)}"
     path = _path(bundle, conversation_id)
@@ -82,7 +82,7 @@ def load(bundle: Path, conversation_id: str) -> Conversation:
     return Conversation(
         id=conversation_id,
         path=path,
-        revision_id=str(meta["revision_id"]),
+        revision_id=str(meta["revision_id"]) if meta["revision_id"] is not None else None,
         mode=str(meta["mode"]),
         turns=turns,
     )

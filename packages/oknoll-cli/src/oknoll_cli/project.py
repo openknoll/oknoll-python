@@ -194,8 +194,19 @@ No revisions yet.
 """
 
 
-def init_project(path: Path, *, name: str | None = None, force: bool = False) -> list[str]:
-    """Create the project skeleton; returns created paths relative to `path`."""
+def init_project(
+    path: Path,
+    *,
+    name: str | None = None,
+    force: bool = False,
+    bundle_skeleton: bool = True,
+) -> list[str]:
+    """Create the project skeleton; returns created paths relative to `path`.
+
+    With ``bundle_skeleton=False`` only the config, ignore file, and
+    ``sources/`` are written — for adopting an imported bundle that already
+    owns its own tree.
+    """
     path.mkdir(parents=True, exist_ok=True)
     config_path = path / CONFIG_NAME
     if config_path.exists() and not force:
@@ -216,14 +227,18 @@ def init_project(path: Path, *, name: str | None = None, force: bool = False) ->
 
     write(config_path, _config_text(project_name))
     write(path / IGNORE_NAME, _IGNORE_TEXT)
-    write(bundle_dir / "index.md", _index_text(project_name))
-    write(bundle_dir / "log.md", _LOG_TEXT)
-    write(
-        bundle_dir / "manifest.json",
-        json.dumps({"okf_version": "0.2", "files": {}}, indent=2) + "\n",
-    )
+    if bundle_skeleton:
+        write(bundle_dir / "index.md", _index_text(project_name))
+        write(bundle_dir / "log.md", _LOG_TEXT)
+        write(
+            bundle_dir / "manifest.json",
+            json.dumps({"okf_version": "0.2", "files": {}}, indent=2) + "\n",
+        )
 
-    for sub in ("sources", "bundle/concepts", "bundle/references"):
+    subdirs = (
+        ("sources", "bundle/concepts", "bundle/references") if bundle_skeleton else ("sources",)
+    )
+    for sub in subdirs:
         target = path / sub
         if not target.exists():
             target.mkdir(parents=True)

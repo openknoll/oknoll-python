@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import typer
 from okf_core import (
+    ArchiveError,
+    AskResult,
+    BundleImportError,
     EmbeddingProvider,
     ExplorerError,
     LintConfig,
@@ -32,10 +36,13 @@ from okf_core import (
     build_revision,
     check_reproducibility,
     diff_revisions,
+    extract_archive,
+    import_bundle,
     lint_bundle,
     pack_bundle,
     read_current_revision_id,
     revision_dir,
+    verify_archive_checksum,
     write_trace,
     write_viz,
 )
@@ -170,6 +177,41 @@ def _embedder_for(config: project.ProjectConfig, override: str | None = None) ->
         raise _fail(str(exc)) from exc
 
 
+def _apply_standalone_env() -> None:
+    # No project: an enclosing oknoll.toml (and its .env) is deliberately
+    # ignored — precedent: `serve --mcp --bundle`. Machine-level config only.
+    try:
+        global_config.apply_global_env()
+    except (ProviderError, global_config.GlobalConfigError) as exc:
+        raise _fail(str(exc)) from exc
+
+
+def _standalone_provider(override: str | None = None) -> ModelProvider:
+    _apply_standalone_env()
+    spec = override or _global_defaults().model or "stub"
+    try:
+        return resolve_provider_spec(spec)
+    except (ValueError, ProviderError) as exc:
+        raise _fail(str(exc)) from exc
+
+
+def _standalone_embedder(override: str | None = None) -> EmbeddingProvider:
+    _apply_standalone_env()
+    spec = override or _global_defaults().embedder or "stub"
+    try:
+        return resolve_embedder_spec(spec)
+    except (ValueError, ProviderError) as exc:
+        raise _fail(str(exc)) from exc
+
+
+def _try_write_trace(bundle_path: Path, result: AskResult) -> Path | None:
+    try:
+        return write_trace(bundle_path, result)
+    except OSError:
+        typer.secho("bundle is read-only — trace not persisted", fg=typer.colors.YELLOW, err=True)
+        return None
+
+
 def _print_findings(report: LintReport) -> None:
     for finding in report.sorted_findings():
         color = {
@@ -210,8 +252,17 @@ def init(
         None, "--name", help="Project name (defaults to the directory name)."
     ),
     force: bool = typer.Option(False, "--force", help="Overwrite an existing oknoll.toml."),
+    from_source: Path | None = typer.Option(
+        None,
+        "--from",
+        help="Existing OKF bundle to adopt as the first published revision: a bundle "
+        "directory or packed .tar.gz (verified against a .sha256 sidecar when present).",
+    ),
 ) -> None:
     """Create project config, source/output dirs, ignore file, and a bundle skeleton."""
+    if from_source is not None:
+        _init_from_bundle(path, from_source, name=name, force=force)
+        return
     try:
         created = project.init_project(path, name=name, force=force)
     except project.ProjectExistsError as exc:
@@ -220,6 +271,64 @@ def init(
     for rel in created:
         typer.echo(f"created {rel}")
     typer.secho(f"Initialized oknoll project in {path}", fg=typer.colors.GREEN)
+
+
+def _init_from_bundle(path: Path, source: Path, *, name: str | None, force: bool) -> None:
+    """Adopt an existing bundle (dir or archive) as the project's first revision."""
+    if not source.exists():
+        raise _fail(f"oknoll init: {source} does not exist")
+    is_archive = source.is_file()
+    if is_archive and not (source.name.endswith(".tar.gz") or source.name.endswith(".tgz")):
+        raise _fail("oknoll init: --from takes a bundle directory or a .tar.gz/.tgz archive")
+    config_path = path / project.CONFIG_NAME
+    if config_path.exists() and not force:
+        raise _fail(f"{config_path} already exists (use --force to overwrite the config)")
+    bundle_dir = path / "bundle"
+    # --force keeps its meaning (overwrite oknoll.toml); bundle content is
+    # never overwritten — a pre-existing .oknoll/ counts as content too.
+    if bundle_dir.exists() and any(bundle_dir.iterdir()):
+        raise _fail(
+            f"oknoll init: {bundle_dir} is not empty — existing bundles are never overwritten"
+        )
+
+    source_name = source.name or source.resolve().name
+    with tempfile.TemporaryDirectory(prefix="oknoll-unpack-") as unpack_dir:
+        if is_archive:
+            try:
+                digest = verify_archive_checksum(source)
+                if digest is not None:
+                    typer.echo(f"checksum verified: {source.name}.sha256")
+                source_tree = extract_archive(source, Path(unpack_dir))
+            except ArchiveError as exc:
+                raise _fail(f"oknoll init: {exc}") from exc
+        else:
+            source_tree = source
+
+        try:
+            outcome = import_bundle(source_tree, bundle_dir, summary=f"imported from {source_name}")
+        except BundleImportError as exc:
+            raise _fail(f"oknoll init: {exc}") from exc
+
+    if not outcome.published:
+        _print_findings(outcome.lint_report)
+        raise _fail(
+            "import failed lint — fix the source bundle (see `oknoll lint`), or serve it "
+            "read-only with `oknoll serve --mcp --bundle <dir>`; "
+            f"staged copy kept at {outcome.staged_dir} for inspection"
+        )
+
+    created = project.init_project(path, name=name, force=force, bundle_skeleton=False)
+    for rel in created:
+        typer.echo(f"created {rel}")
+    typer.echo(
+        f"imported {outcome.file_count} file(s) as revision {outcome.revision_id} "
+        f"from {source_name}"
+    )
+    typer.secho(
+        "no sources registered yet — `oknoll ask/chat/serve/pack` work now; "
+        "run `oknoll add` before `oknoll build`",
+        fg=typer.colors.GREEN,
+    )
 
 
 @app.command()
@@ -398,33 +507,49 @@ def ask(
             "ollama:nomic-embed-text (stub is the deterministic default)."
         ),
     ),
+    bundle: Path | None = typer.Option(
+        None,
+        "--bundle",
+        help="Answer over this bundle directory instead of the project's — no project "
+        "or published revision required (foreign bundles welcome).",
+    ),
 ) -> None:
     """One-shot answer over the current bundle revision."""
     if mode not in ("pd", "rag"):
         typer.secho(f"oknoll ask: unknown mode {mode!r} (pd|rag)", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=2)
 
-    config = _load_project()
-    provider = _provider_for(config, override=model)
-
-    if read_current_revision_id(config.bundle_path) is None:
-        raise _fail("no published revision to explore — run `oknoll build` first")
+    if bundle is not None:
+        bundle_path = bundle.resolve()
+        if not bundle_path.is_dir():
+            raise _fail(f"oknoll ask: {bundle_path} is not a directory")
+        provider = _standalone_provider(model)
+        ask_embedder = _standalone_embedder(embedder) if mode == "rag" else None
+        display_root = Path.cwd()
+    else:
+        config = _load_project()
+        provider = _provider_for(config, override=model)
+        if read_current_revision_id(config.bundle_path) is None:
+            raise _fail("no published revision to explore — run `oknoll build` first")
+        bundle_path = config.bundle_path
+        ask_embedder = _embedder_for(config, override=embedder) if mode == "rag" else None
+        display_root = config.root
 
     try:
         result = answer_question(
-            bundle_dir=config.bundle_path,
+            bundle_dir=bundle_path,
             question=question,
             provider=provider,
             today=date.today().isoformat(),
             condition=mode,
-            embedder=_embedder_for(config, override=embedder) if mode == "rag" else None,
+            embedder=ask_embedder,
         )
     except (ExplorerError, ValueError, ProviderError) as exc:
         raise _fail(f"oknoll ask: {exc}") from exc
 
-    trace_path = write_trace(config.bundle_path, result)
+    trace_path = _try_write_trace(bundle_path, result)
     # An absolute [paths].bundle puts the trace outside the project root.
-    shown_trace = _display_path(trace_path, config.root)
+    shown_trace = _display_path(trace_path, display_root) if trace_path is not None else None
 
     if json_output:
         payload = result.to_dict()
@@ -444,7 +569,7 @@ def ask(
             typer.secho(f"- {warning}", fg=typer.colors.YELLOW)
     budget = result.trace["budget"]
     typer.echo(
-        f"\ntrace: {shown_trace} "
+        f"\ntrace: {shown_trace or '(not persisted — read-only bundle)'} "
         f"({len(result.trace['tools'])} tool call(s), {budget['spent_chars']} chars, "
         f"~{budget['spent_tokens']} tokens)"
     )
@@ -468,14 +593,25 @@ def chat(
         # The grammar stays stable; the capability is deliberately absent.
         raise _fail("oknoll chat: multi-bundle chat is out of scope — pass at most one --bundle")
 
-    config = _load_project()
-    provider = _provider_for(config)
-    bundle_path = Path(bundle[0]).resolve() if bundle else config.bundle_path
+    if bundle:
+        bundle_path = Path(bundle[0]).resolve()
+        if not bundle_path.is_dir():
+            raise _fail(f"oknoll chat: {bundle_path} is not a directory")
+        provider = _standalone_provider()
+        display_root = Path.cwd()
+        # A foreign bundle needs neither a project nor a published revision:
+        # an unpinned (revision-less) conversation is allowed.
+        current = read_current_revision_id(bundle_path)
+    else:
+        config = _load_project()
+        provider = _provider_for(config)
+        bundle_path = config.bundle_path
+        display_root = config.root
+        current = read_current_revision_id(bundle_path)
+        if current is None:
+            raise _fail("no published revision to explore — run `oknoll build` first")
 
-    current = read_current_revision_id(bundle_path)
-    if current is None:
-        raise _fail("no published revision to explore — run `oknoll build` first")
-
+    shown_revision = current or "(none — unpinned)"
     if resume is not None:
         try:
             conversation = conversations.load(bundle_path, resume)
@@ -484,8 +620,8 @@ def chat(
         if conversation.revision_id != current:
             raise _fail(
                 f"oknoll chat: conversation {conversation.id} is pinned to revision "
-                f"{conversation.revision_id}, but the bundle is now at {current} — "
-                "start a new conversation"
+                f"{conversation.revision_id or '(none — unpinned)'}, but the bundle is now at "
+                f"{shown_revision} — start a new conversation"
             )
         if mode is not None and mode != conversation.mode:
             raise _fail(
@@ -493,19 +629,35 @@ def chat(
                 f"{conversation.mode!r}; repeated arguments must match"
             )
         typer.secho(
-            f"resumed {conversation.id} — revision {current}, mode {conversation.mode}, "
+            f"resumed {conversation.id} — revision {shown_revision}, mode {conversation.mode}, "
             f"{conversation.turns} prior turn(s)",
             fg=typer.colors.GREEN,
         )
     else:
-        conversation = conversations.create(bundle_path, revision_id=current, mode=mode or "pd")
+        try:
+            conversation = conversations.create(bundle_path, revision_id=current, mode=mode or "pd")
+        except OSError:
+            typer.secho(
+                "bundle is read-only — conversation stored in a temporary directory "
+                "(not resumable from this bundle)",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+            fallback = Path(tempfile.mkdtemp(prefix="oknoll-chat-"))
+            conversation = conversations.create(fallback, revision_id=current, mode=mode or "pd")
         typer.secho(
-            f"conversation {conversation.id} — revision {current}, mode {conversation.mode} "
+            f"conversation {conversation.id} — revision {shown_revision}, "
+            f"mode {conversation.mode} "
             f"(resume with `oknoll chat --resume {conversation.id}`)",
             fg=typer.colors.GREEN,
         )
 
-    embedder = _embedder_for(config) if conversation.mode == "rag" else None
+    if conversation.mode != "rag":
+        embedder = None
+    elif bundle:
+        embedder = _standalone_embedder()
+    else:
+        embedder = _embedder_for(config)
     typer.echo("ask questions; empty line or `exit` to quit")
     while True:
         try:
@@ -523,8 +675,8 @@ def chat(
         live = read_current_revision_id(bundle_path)
         if live != conversation.revision_id:
             typer.secho(
-                f"bundle revision changed ({conversation.revision_id} → {live}) — "
-                f"this conversation is pinned; start a new one to continue",
+                f"bundle revision changed ({conversation.revision_id or '(none — unpinned)'} "
+                f"→ {live}) — this conversation is pinned; start a new one to continue",
                 fg=typer.colors.RED,
                 err=True,
             )
@@ -555,7 +707,7 @@ def chat(
             conversations.append_turn(conversation, "error", {"text": str(exc)})
             continue
 
-        trace_path = write_trace(bundle_path, result)
+        trace_path = _try_write_trace(bundle_path, result)
         typer.echo(result.answer)
         for citation in result.citations:
             typer.echo(f"  - {citation.path}")
@@ -568,10 +720,12 @@ def chat(
                 "text": result.answer,
                 "citations": [c.path for c in result.citations],
                 "warnings": list(result.warnings),
-                "trace_path": _display_path(trace_path, config.root),
+                "trace_path": (
+                    _display_path(trace_path, display_root) if trace_path is not None else None
+                ),
             },
         )
-    typer.echo(f"conversation saved: {_display_path(conversation.path, config.root)}")
+    typer.echo(f"conversation saved: {_display_path(conversation.path, display_root)}")
 
 
 @app.command()
