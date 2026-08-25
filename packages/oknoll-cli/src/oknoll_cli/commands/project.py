@@ -57,6 +57,9 @@ def build() -> None:
             sources=sources,
             provider=provider,
             generation_version=config.generation_version,
+            # Progress goes to stderr so stdout stays the machine-readable
+            # summary; slow steps announce themselves before starting.
+            on_progress=lambda message: typer.secho(message, err=True, dim=True),
         )
     except (PipelineError, ConnectorError, ProviderError) as exc:
         raise fail(f"oknoll project build: {exc}") from exc

@@ -324,12 +324,18 @@ def _section_digest(doc: CanonicalDoc) -> list[str]:
 
 
 def _acquire_and_normalize(
-    sources: Sequence[PipelineSource], cache: BuildCache
+    sources: Sequence[PipelineSource],
+    cache: BuildCache,
+    progress: Callable[[str], None],
 ) -> list[_SourceUnit]:
     units: list[_SourceUnit] = []
     seen: set[str] = set()
     for pipeline_source in sources:
         connector = pipeline_source.connector
+        # Announce before acquiring: a slow fetch (a big repo, a web crawl)
+        # should be attributable while it runs, not only after it returns.
+        progress(f"acquire: {connector.id} {pipeline_source.source.uri}")
+        before = len(units)
         for item in connector.acquire(pipeline_source.source, pipeline_source.policy):
             if item.uri in seen:
                 continue
@@ -347,6 +353,9 @@ def _acquire_and_normalize(
                     docs=docs,
                 )
             )
+        progress(
+            f"acquire: {connector.id} {pipeline_source.source.uri} → {len(units) - before} file(s)"
+        )
     return units
 
 
@@ -559,6 +568,7 @@ def _plan(
     provider: ModelProvider,
     cache: BuildCache,
     generation_version: str,
+    progress: Callable[[str], None],
 ) -> list[ConceptPlan]:
     """Concept boundaries: bounded model split decisions over section outlines,
     falling back to one concept per document.
@@ -572,6 +582,7 @@ def _plan(
     for index, unit in enumerate(units, start=1):
         unit.source_id = f"source-{index:03d}"
         unit.ref_path = f"{bundle_mod.REFERENCES_DIR}/{unit.source_id}.md"
+        progress(f"plan: [{index}/{len(units)}] {unit.uri}")
         for doc in unit.docs:
             for concept_doc in _planned_docs(doc, provider, cache, generation_version):
                 base = _slugify(concept_doc.title)
@@ -645,18 +656,21 @@ def _generate(
     cache: BuildCache,
     clock: Callable[[], str],
     generation_version: str,
+    progress: Callable[[str], None],
 ) -> tuple[dict[str, str], dict[str, str]]:
     """Write references and concepts; return their descriptions keyed by bundle
     path (``concepts_by_path, references_by_path``) so the link stage can build
     a descriptive index without re-asking the provider."""
     related = _related_links(plans)
     reference_descriptions: dict[str, str] = {}
-    for unit in units:
+    for ref_index, unit in enumerate(units, start=1):
+        progress(f"generate: reference [{ref_index}/{len(units)}] {unit.ref_path}")
         reference_descriptions[unit.ref_path] = _write_reference_snapshot(
             stage, unit, provider, cache, generation_version
         )
     concept_descriptions: dict[str, str] = {}
-    for plan in plans:
+    for concept_index, plan in enumerate(plans, start=1):
+        progress(f"generate: concept [{concept_index}/{len(plans)}] {plan.concept_path}")
         concept_descriptions[plan.concept_path] = _write_concept(
             stage, plan, provider, cache, clock, generation_version, related[plan.concept_path]
         )
@@ -959,15 +973,21 @@ def build_revision(
     publish: bool = True,
     clock: Callable[[], str] | None = None,
     generation_version: str = DEFAULT_GENERATION_VERSION,
+    on_progress: Callable[[str], None] | None = None,
 ) -> BuildOutcome:
     """Run the full pipeline; publish a new immutable revision when content changed.
 
     With ``publish=False`` the staged tree is left in place (used by diff --check).
     ``generation_version`` is the user-facing regeneration knob: bumping it in
     project config invalidates every cached model generation for this bundle.
+    ``on_progress`` receives human-readable stage/work-item lines as the build
+    runs (slow steps — source acquisition, model calls — announce themselves
+    *before* starting, so a stalled build names its current work item); it is
+    presentation only and never affects the built bytes.
     """
     bundle_dir.mkdir(parents=True, exist_ok=True)
     clock = clock or _utc_now
+    progress = on_progress or (lambda _message: None)
     cache = BuildCache.load(bundle_dir / CACHE_PATH)
 
     stage = stage_dir if stage_dir is not None else bundle_dir / STAGE_DIR
@@ -976,20 +996,28 @@ def build_revision(
     stage.mkdir(parents=True)
 
     try:
-        units = _acquire_and_normalize(sources, cache)
-        plans = _plan(units, provider, cache, generation_version)
-        concept_descriptions, reference_descriptions = _generate(
-            stage, units, plans, provider, cache, clock, generation_version
+        units = _acquire_and_normalize(sources, cache, progress)
+        progress(
+            f"normalize: {sum(len(u.docs) for u in units)} document(s) "
+            f"from {len(units)} source file(s)"
         )
+        plans = _plan(units, provider, cache, generation_version, progress)
+        progress(f"plan: {len(plans)} concept(s) (provider: {provider.id})")
+        concept_descriptions, reference_descriptions = _generate(
+            stage, units, plans, provider, cache, clock, generation_version, progress
+        )
+        progress("generate: bundle description")
         description = _bundle_description(
             project_name, plans, concept_descriptions, provider, cache, generation_version
         )
+        progress(f"generate: done — cache {cache.hits} hit(s), {cache.misses} miss(es)")
     except Exception:
         # A failed build (e.g. one refused model call) must not discard the
         # model decisions that already succeeded: the cache is content-keyed,
         # so persisting it is always safe and makes a retry incremental.
         cache.save()
         raise
+    progress("finalize: link, lint, index")
     _link(stage, project_name, plans, concept_descriptions, reference_descriptions, description)
 
     revision_id = compute_revision_id(stage)

@@ -66,6 +66,14 @@ performs work:
 - Retrieval conditions are unchanged (`pd`/`rag` in `--mode`); the a2k-v1
   benchmark contract is untouched.
 
+### Build feedback
+
+- `oknoll project build` streams progress to stderr while it runs: each
+  source announces itself before acquisition, every planned/generated
+  concept and reference is numbered (`generate: concept [3/12] …`), and
+  cache hit/miss totals close the generation stage — a stalled build now
+  names its current work item instead of sitting silent.
+
 ### Packaging
 
 - New PyPI distribution `oknoll-runtime` (daemon + store; depends on
