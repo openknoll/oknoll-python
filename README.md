@@ -337,7 +337,7 @@ tool produced — goes through the store, which verifies it (sidecar checksum,
 safe extraction, manifest byte-verification) and keeps it immutable:
 
 ```sh
-oknoll bundle install acme-retail.okf.tgz --alias acme   # verify + register
+oknoll bundle install acme-retail.okf.tgz --name acme    # verify + register
 oknoll query ask acme "what is gross margin?"            # cited, offline
 oknoll query ask ./their-bundle/ "what is gross margin?" # or straight off a tree
 
