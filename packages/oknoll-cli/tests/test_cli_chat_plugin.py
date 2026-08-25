@@ -86,7 +86,10 @@ def test_chat_second_turn_carries_the_conversation(built_project: Path) -> None:
 
 
 def test_chat_resume_restores_the_conversation_context(built_project: Path) -> None:
-    assert runner.invoke(app, ["query", "chat"], input="How are credentials stored?\nexit\n").exit_code == 0
+    assert (
+        runner.invoke(app, ["query", "chat"], input="How are credentials stored?\nexit\n").exit_code
+        == 0
+    )
     conversation_id = _conversation_files(built_project)[0].stem
 
     result = runner.invoke(
