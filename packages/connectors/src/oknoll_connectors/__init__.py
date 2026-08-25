@@ -19,7 +19,7 @@ from oknoll_connectors.protocol import (
 )
 from oknoll_connectors.web import WebConnector
 
-__version__ = "0.4.0"
+__version__ = "0.4.0a1"
 
 __all__ = [
     "Connector",

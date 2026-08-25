@@ -1,12 +1,12 @@
 [project]
 name = "oknoll-runtime"
-version = "0.4.0"
+version = "0.4.0a1"
 description = "OpenKnoll local runtime: content-addressed store, OkNoll OCI images, catalog, locators"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 readme = "README.md"
 dependencies = [
-    "okf-core==0.4.0",
+    "okf-core==0.4.0a1",
     "platformdirs>=4.0",
     "mcp>=2.0",
     "starlette>=0.40",

@@ -49,7 +49,9 @@ VERSION_FILES = [
     REPO / "packages" / "oknoll-cli" / "src" / "oknoll_cli" / "__init__.py",
 ]
 
-VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+# major.minor.patch with an optional PEP 440 pre-release suffix (a1/b2/rc3):
+# alpha tags (v0.4.0a1) move the lockstep exactly like finals.
+VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$")
 
 
 def _rewrite(path: Path, pattern: str, replacement: str, *, required: bool) -> None:
@@ -63,7 +65,7 @@ def _rewrite(path: Path, pattern: str, replacement: str, *, required: bool) -> N
 
 def main() -> None:
     if len(sys.argv) != 2 or not VERSION_RE.match(sys.argv[1]):
-        sys.exit(f"usage: {sys.argv[0]} <major.minor.patch>")
+        sys.exit(f"usage: {sys.argv[0]} <major.minor.patch[preN]>")
     version = sys.argv[1]
 
     for package_dir in PACKAGE_DIRS:

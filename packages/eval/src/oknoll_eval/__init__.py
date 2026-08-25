@@ -16,7 +16,7 @@ from oknoll_eval.benchmark import (
 from oknoll_eval.report import render_report
 from oknoll_eval.runner import CONDITIONS, run_benchmark
 
-__version__ = "0.4.0"
+__version__ = "0.4.0a1"
 
 __all__ = [
     "CONDITIONS",
