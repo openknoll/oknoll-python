@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from okf_core import EmbeddingProvider, ExplorerError, ModelProvider, answer_question
+from okf_core.ask import MAX_CHAT_TURNS, ConversationContext
 
 from oknoll_runtime.catalog import Catalog, CatalogEntry
 from oknoll_runtime.dirs import RuntimeDirs
@@ -66,6 +67,11 @@ class AskSession:
     mode: str
     created_at: str
     turns: int = 0
+    # Bounded conversation memory (PD only): prior question/answer pairs reach
+    # the prompt as clipped data, and the last answer's citation paths seed the
+    # next turn's retrieval — the daemon-session mirror of the CLI transcript.
+    history: list[dict[str, str]] = field(default_factory=list)
+    carryover: list[str] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def to_dict(self) -> dict[str, Any]:
@@ -305,6 +311,18 @@ class DaemonService:
                 "not_configured", "the requested model provider is not available", status=501
             ) from exc
 
+        # The session is the conversation's memory: prior question/answer pairs
+        # reach the prompt and the last answer's citations seed retrieval.
+        # PD only — the RAG baseline stays conversation-blind by design.
+        context = None
+        if session is not None and ask_mode == "pd":
+            with session.lock:
+                if session.history or session.carryover:
+                    context = ConversationContext(
+                        turns=list(session.history),
+                        carryover_paths=list(session.carryover),
+                    )
+
         try:
             result = answer_question(
                 bundle_dir=tree,
@@ -313,6 +331,7 @@ class DaemonService:
                 today=self._today or date.today().isoformat(),
                 condition=ask_mode,
                 embedder=embedder_impl,
+                conversation=context,
             )
         except (ExplorerError, ValueError) as exc:
             raise ServiceError("refused", str(exc), status=400) from exc
@@ -325,6 +344,9 @@ class DaemonService:
         if session is not None:
             with session.lock:
                 session.turns += 1
+                session.history.append({"question": question, "answer": result.answer})
+                del session.history[:-MAX_CHAT_TURNS]
+                session.carryover = [c.path for c in result.citations]
         self.catalog.touch_last_used(trace_alias)
         trace_name = self._write_trace(trace_alias, result.to_dict())
 

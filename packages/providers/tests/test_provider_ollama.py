@@ -11,7 +11,7 @@ from oknoll_providers import OllamaProvider, ProviderError
 
 CONCEPT_PAYLOAD = {
     "title": "Release process",
-    "excerpt": "Releases ship weekly.",
+    "outline": "Releases ship weekly.",
     "content_hash": "abc",
 }
 

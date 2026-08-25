@@ -330,6 +330,24 @@ keeping the command in the file. And the CLI merges an install-level config at
 `~/.mcp-inspector/mcp.json` — passing `--config` with an explicit `--server oknoll` keeps
 the run deterministic regardless of what is stored there.
 
+### Use someone else's bundle
+
+A bundle you received — an `oknoll bundle pack` archive or any OKF tree another
+tool produced — goes through the store, which verifies it (sidecar checksum,
+safe extraction, manifest byte-verification) and keeps it immutable:
+
+```sh
+oknoll bundle install acme-retail.okf.tgz --alias acme   # verify + register
+oknoll query ask acme "what is gross margin?"            # cited, offline
+oknoll query ask ./their-bundle/ "what is gross margin?" # or straight off a tree
+
+oknoll bundle checkout acme ./acme-work                  # explicit writable copy
+```
+
+Install is permissive: lint findings are reported, never blocking — foreign
+bundles work without rewriting. The installed tree is read-only by design;
+`bundle checkout` is the explicit transition to a tree you can edit.
+
 ### Chat interactively
 
 `oknoll query chat` is a single-bundle REPL over the same explorer, pinned to the current

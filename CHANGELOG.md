@@ -53,7 +53,13 @@ performs work:
   configures an agent once; `oknoll mcp stdio` remains the single-bundle
   fallback and now accepts installed aliases.
 - **Daemon chat**: `query chat --bundle a --bundle b` chats across installed
-  bundles through the daemon, one revision-pinned session per bundle.
+  bundles through the daemon, one revision-pinned session per bundle. Daemon
+  ask sessions carry bounded conversation memory: prior question/answer pairs
+  reach the prompt as data and the last answer's citations seed the next
+  turn's retrieval — the same contract as local `query chat`.
+- **Paged read everywhere**: the v0.3.5 `read` cursor (`start_char`/
+  `next_start`) is part of the shared toolkit, so stdio MCP, the daemon HTTP
+  API, and the daemon MCP all page large documents identically.
 - **Locator grammar**: `local:` / `oci://` / `oknoll://` (spec and test
   vectors in-repo); remote locators are parsed today and land with the
   registry client.
@@ -67,5 +73,27 @@ performs work:
   lockstep.
 - macOS and Linux are the supported platforms for v0.4; Windows is untested.
 
-Earlier releases (≤ v0.3.2) predate this changelog; see the GitHub Releases
+## v0.3.5 — 2026-08-16
+
+- **Self-describing bundles**: the index becomes descriptive (per-entry
+  descriptions), references and the bundle itself gain descriptions; concept
+  descriptions see the whole section outline; word-boundary clipping and
+  prose normalization keep them clean.
+- **Overview table of contents** and per-hit search descriptions in the
+  explorer and MCP tools.
+- **Paged read**: `read` gains a `start_char`/`next_start` cursor — large
+  documents are fully reachable through bounded calls.
+- **Chat remembers the conversation**: history reaches the prompt as clipped
+  data and the last answer's citations seed retrieval (PD only).
+- **Ask policy v2**: evidence scales with the retrieval budget; the published
+  a2k-v1 evaluation stays pinned to policy v1.
+- Finer concept planning: richer outline, retuned prompt, bounded re-split.
+
+## v0.3.4 — 2026-08-15
+
+- Generated concepts carry frontmatter type `Concept` (was `Reference`).
+- `OllamaEmbedder` splits large inputs into bounded batches.
+- okb-pub-v1 results live under `runs/`, one immutable folder per run.
+
+Earlier releases (≤ v0.3.3) predate this changelog; see the GitHub Releases
 notes.

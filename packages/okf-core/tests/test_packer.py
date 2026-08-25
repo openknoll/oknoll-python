@@ -89,7 +89,7 @@ def test_pack_rejects_unknown_profile(golden_dir: Path, tmp_path: Path) -> None:
 # every OS and zlib build. If this pin breaks on one platform, published
 # image digests would diverge — that is a release blocker, not a test to
 # update casually. (Legitimate fixture/packer changes update the pin.)
-GOLDEN_MINIMAL_PACK_SHA256 = "fe017d5bb62c8474f79063f2c355b2b22b0cbd3945182a3a7e0b08a3eedf9d02"
+GOLDEN_MINIMAL_PACK_SHA256 = "5c2b9574b30e881b4c0004e6f65ddec13da0e8715e1571118d512f5e6dd89c9a"
 
 
 def test_pack_digest_is_pinned_cross_os(golden_dir: Path, tmp_path: Path) -> None:

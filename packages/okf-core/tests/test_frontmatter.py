@@ -55,7 +55,7 @@ def test_write_is_idempotent_and_deterministic() -> None:
 
 
 def test_writer_emits_canonical_key_order() -> None:
-    text = "---\nx_last: 1\ntitle: T\ntype: Reference\n---\n\nBody.\n"
+    text = "---\nx_last: 1\ntitle: T\ntype: Concept\n---\n\nBody.\n"
     written = write_document(parse_document(text))
     assert written.index("type:") < written.index("title:") < written.index("x_last:")
 

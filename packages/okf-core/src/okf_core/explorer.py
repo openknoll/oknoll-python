@@ -37,6 +37,11 @@ MAX_PEEK_LINES = 100
 MAX_PEEK_CHARS = 8_000
 MAX_READ_CHARS = 40_000
 MAX_LINK_EDGES = 32
+# overview's bounded table of contents: enough to characterize a bundle in one
+# call, small enough that "call this first" stays cheap; `list` remains the
+# complete, filterable listing.
+MAX_OVERVIEW_ENTRIES = 25
+MAX_OVERVIEW_DESCRIPTION_CHARS = 240
 # peek/read return the whole frontmatter dict; a permissive-consumer bundle can
 # carry arbitrarily large frontmatter values, so the projection is bounded too —
 # otherwise the body cap above is a paper wall.
@@ -213,8 +218,24 @@ class Explorer:
             return self.pinned_revision_id
         return read_current_revision_id(self.root)
 
+    def _index_order(self) -> dict[str, int]:
+        """First-appearance rank of each root-index link target — the curated
+        table-of-contents order, when an index exists."""
+        if bundle_mod.INDEX_NAME not in self._bundle_files():
+            return {}
+        _, body = self._parse(bundle_mod.INDEX_NAME)
+        order: dict[str, int] = {}
+        for link in links_mod.extract_links(body):
+            if links_mod.is_external(link.target):
+                continue
+            resolved = links_mod.resolve_target(link.target, bundle_mod.INDEX_NAME)
+            if resolved is not None and resolved not in order:
+                order[resolved] = len(order)
+        return order
+
     def overview(self) -> dict[str, Any]:
-        """Root index plus type/tag/status/trust/freshness summary."""
+        """Root index, type/tag/status/trust/freshness summary, and a bounded
+        table of contents (index order first; ``list`` has the full listing)."""
         index_path = self._read_root / bundle_mod.INDEX_NAME
         title = self.root.name
         description = None
@@ -231,14 +252,29 @@ class Explorer:
         stale_count = 0
         concepts = 0
         references = 0
+        toc: list[dict[str, Any]] = []
         for file in bundle_mod.markdown_files(self._files_snapshot()):
-            if bundle_mod.is_reference(file.rel_path):
+            is_reference = bundle_mod.is_reference(file.rel_path)
+            if not is_reference and not bundle_mod.is_concept(file.rel_path):
+                continue
+            frontmatter, _ = self._parse(file.rel_path)
+            entry_description = frontmatter.description if frontmatter else None
+            if entry_description is not None:
+                entry_description = indexing.clip_words(
+                    entry_description, MAX_OVERVIEW_DESCRIPTION_CHARS
+                )
+            toc.append(
+                {
+                    "path": file.rel_path,
+                    "title": (frontmatter.title if frontmatter else None) or file.rel_path,
+                    "type": frontmatter.type if frontmatter else None,
+                    "description": entry_description,
+                }
+            )
+            if is_reference:
                 references += 1
                 continue
-            if not bundle_mod.is_concept(file.rel_path):
-                continue
             concepts += 1
-            frontmatter, _ = self._parse(file.rel_path)
             if frontmatter is None:
                 continue
             if frontmatter.type:
@@ -252,12 +288,19 @@ class Explorer:
             if self._freshness(frontmatter)["stale"]:
                 stale_count += 1
 
+        # Curated order first — the index's own link order — then anything the
+        # index does not link, in sorted-path order. Deterministic either way.
+        index_order = self._index_order()
+        toc.sort(key=lambda e: (index_order.get(e["path"], len(index_order)), e["path"]))
+
         return {
             "title": title,
             "description": description,
             "revision_id": self._session_revision_id(),
             "revision_pinned": self.pinned_revision_id is not None,
             "counts": {"concepts": concepts, "references": references},
+            "contents": toc[:MAX_OVERVIEW_ENTRIES],
+            "contents_total": len(toc),
             "types": dict(sorted(types.items())),
             "tags": dict(sorted(tags.items())),
             "trust": {
@@ -349,17 +392,28 @@ class Explorer:
             "truncated": len(body_lines) > lines or len(body_start) < len(body),
         }
 
-    def read(self, path: str, *, max_chars: int = MAX_READ_CHARS) -> dict[str, Any]:
-        """One authorized body plus its links, size-capped."""
+    def read(
+        self, path: str, *, max_chars: int = MAX_READ_CHARS, start_char: int = 0
+    ) -> dict[str, Any]:
+        """One authorized body plus its links, size-capped and pageable.
+
+        A document larger than the per-call cap is read in pages: while
+        ``truncated`` is true, call again with ``start_char`` set to the
+        returned ``next_start`` until it is null. Concatenating the pages
+        reproduces the body exactly; every page is a pure function of
+        ``(revision, path, start_char, max_chars)``.
+        """
         max_chars = max(1, min(max_chars, MAX_READ_CHARS))
         rel = self._safe_rel(path)
         frontmatter, body = self._parse(rel)
-        truncated = len(body) > max_chars
-        clipped = body[:max_chars]
+        start_char = max(0, min(start_char, len(body)))
+        clipped = body[start_char : start_char + max_chars]
+        truncated = start_char + len(clipped) < len(body)
         out_links: list[dict[str, Any]] = []
         # Links come from the whole body, not the clipped text: the cap bounds
         # how much prose a caller receives, and a link straddling the cut would
-        # otherwise vanish here while `links` still reports it.
+        # otherwise vanish here while `links` still reports it. Every page of a
+        # document therefore reports the same link set.
         for link in links_mod.extract_links(body):
             external = links_mod.is_external(link.target)
             resolved = None if external else links_mod.resolve_target(link.target, rel)
@@ -376,6 +430,9 @@ class Explorer:
             "frontmatter": self._bounded_frontmatter(frontmatter),
             "body": clipped,
             "chars": len(clipped),
+            "start_char": start_char,
+            "body_total_chars": len(body),
+            "next_start": start_char + len(clipped) if truncated else None,
             "truncated": truncated,
             "links": out_links,
             **self._freshness(frontmatter),

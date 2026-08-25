@@ -8,6 +8,7 @@ created with, whatever happens to the alias afterwards.
 from __future__ import annotations
 
 import concurrent.futures
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -221,3 +222,67 @@ def test_ask_without_provider_is_501(app: Starlette) -> None:
         response = client.post("/api/v1/ask", json={"bundle": "golden", "question": "q"})
     assert response.status_code == 501
     assert response.json()["code"] == "not_configured"
+
+
+def test_paged_read_over_http(client: TestClient) -> None:
+    search = client.get("/api/v1/bundles/golden/search?query=incident")
+    path = search.json()["results"][0]["path"]
+
+    full = client.get(f"/api/v1/bundles/golden/read?path={path}").json()
+    assert full["truncated"] is False and full["next_start"] is None
+
+    # Page through the same body in bounded calls; concatenation is lossless.
+    pages: list[str] = []
+    start = 0
+    while True:
+        page = client.get(
+            f"/api/v1/bundles/golden/read?path={path}&max_chars=64&start_char={start}"
+        ).json()
+        assert page["body_total_chars"] == full["body_total_chars"]
+        pages.append(page["body"])
+        if page["next_start"] is None:
+            break
+        assert page["truncated"] is True
+        start = page["next_start"]
+    assert "".join(pages) == full["body"]
+
+
+def test_session_conversation_context_carries_between_turns(client: TestClient) -> None:
+    created = client.post("/api/v1/sessions", json={"bundle": "golden", "mode": "pd"})
+    session = created.json()["session"]
+
+    first = client.post(
+        "/api/v1/ask",
+        json={"session": session, "question": "What is the incident response process?"},
+    ).json()
+    first_trace = json.loads(
+        (runtime_dirs().data / "traces" / "golden" / first["trace"]["id"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert "conversation" not in first_trace["trace"]
+
+    second = client.post(
+        "/api/v1/ask", json={"session": session, "question": "What are its limitations?"}
+    ).json()
+    assert second["turns"] == 2
+    second_trace = json.loads(
+        (runtime_dirs().data / "traces" / "golden" / second["trace"]["id"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    conversation = second_trace["trace"]["conversation"]
+    assert conversation["prior_turns"] == 1
+    # The first answer's citations seeded the second turn's retrieval.
+    assert conversation["carryover_paths"] == [c["path"] for c in first["citations"]]
+
+    # A bundle-addressed ask (no session) stays conversation-blind.
+    bare = client.post(
+        "/api/v1/ask", json={"bundle": "golden", "question": "incident process?"}
+    ).json()
+    bare_trace = json.loads(
+        (runtime_dirs().data / "traces" / "golden" / bare["trace"]["id"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert "conversation" not in bare_trace["trace"]

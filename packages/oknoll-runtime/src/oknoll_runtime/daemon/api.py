@@ -22,7 +22,7 @@ from oknoll_runtime.daemon.service import DaemonService, ServiceError
 
 MAX_BODY_BYTES = 64 * 1024
 
-_INT_PARAMS = ("limit", "lines", "max_chars")
+_INT_PARAMS = ("limit", "lines", "max_chars", "start_char")
 
 # tool name -> (query parameter names, required parameter)
 _TOOL_PARAMS: dict[str, tuple[tuple[str, ...], str | None]] = {
@@ -30,7 +30,7 @@ _TOOL_PARAMS: dict[str, tuple[tuple[str, ...], str | None]] = {
     "list": (("directory", "type", "tag", "status", "limit"), None),
     "search": (("query", "limit"), "query"),
     "peek": (("path", "lines"), "path"),
-    "read": (("path", "max_chars"), "path"),
+    "read": (("path", "max_chars", "start_char"), "path"),
     "links": (("path", "direction", "limit"), "path"),
     "history": (("limit",), None),
 }

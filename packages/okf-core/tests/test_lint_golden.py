@@ -66,7 +66,7 @@ def test_health_metrics_flag_degradation(tmp_path: Path) -> None:
     (bundle / "index.md").write_text("---\ntitle: Idx\n---\n\nLinks nothing.\n", encoding="utf-8")
     (bundle / "log.md").write_text("# Revision log\n", encoding="utf-8")
     (bundle / "concepts" / "lonely.md").write_text(
-        "---\ntitle: Lonely\ntype: Reference\nstale_after: 2020-01-01\n---\n\nNo sources.\n",
+        "---\ntitle: Lonely\ntype: Concept\nstale_after: 2020-01-01\n---\n\nNo sources.\n",
         encoding="utf-8",
     )
     (bundle / "references" / "source-001.md").write_text("# never cited\n", encoding="utf-8")

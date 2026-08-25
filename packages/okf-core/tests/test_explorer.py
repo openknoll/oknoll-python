@@ -47,7 +47,7 @@ def test_overview_summarizes_types_tags_and_trust(minimal: Path) -> None:
     overview = Explorer(minimal, today="2026-08-04").overview()
     assert overview["title"] == "Minimal golden bundle"
     assert overview["counts"] == {"concepts": 2, "references": 1}
-    assert overview["types"] == {"Reference": 2}
+    assert overview["types"] == {"Concept": 2}
     assert overview["tags"] == {"architecture": 2, "security": 1}
     assert overview["trust"] == {
         "statuses": {"draft": 1, "stable": 1},
@@ -55,6 +55,50 @@ def test_overview_summarizes_types_tags_and_trust(minimal: Path) -> None:
         "unverified": 1,
     }
     assert overview["freshness"] == {"stale": 0}
+
+
+def test_overview_contents_follows_index_order_with_sorted_tail(minimal: Path) -> None:
+    overview = Explorer(minimal).overview()
+    assert overview["contents_total"] == 3
+    entries = overview["contents"]
+    # Index link order first (authentication before architecture, as the index
+    # curates it), then files the index does not link, in sorted-path order.
+    assert [e["path"] for e in entries] == [
+        "concepts/authentication.md",
+        "concepts/architecture.md",
+        "references/source-001.md",
+    ]
+    by_path = {e["path"]: e for e in entries}
+    assert by_path["concepts/architecture.md"]["title"] == "System architecture"
+    assert by_path["concepts/architecture.md"]["description"] == (
+        "The deployable workloads and their trust boundaries."
+    )
+    # The frontmatter-less reference still gets a stable entry.
+    assert by_path["references/source-001.md"]["description"] is None
+
+
+def test_overview_contents_is_bounded_and_clipped(minimal: Path) -> None:
+    target = minimal / "concepts" / "architecture.md"
+    text = target.read_text(encoding="utf-8")
+    long_description = "D" * 1_000
+    target.write_text(
+        text.replace(
+            "description: The deployable workloads and their trust boundaries.",
+            f"description: {long_description}",
+        ),
+        encoding="utf-8",
+    )
+    for index in range(30):
+        (minimal / "concepts" / f"filler-{index:02d}.md").write_text(
+            f"---\ntitle: Filler {index}\ntype: Concept\n---\n\nFiller body.\n",
+            encoding="utf-8",
+        )
+    overview = Explorer(minimal).overview()
+    assert overview["contents_total"] == 33
+    assert len(overview["contents"]) == explorer_mod.MAX_OVERVIEW_ENTRIES
+    by_path = {e["path"]: e for e in overview["contents"]}
+    clipped = str(by_path["concepts/architecture.md"]["description"])
+    assert len(clipped) == explorer_mod.MAX_OVERVIEW_DESCRIPTION_CHARS
 
 
 def test_tools_share_one_file_snapshot_across_a_mid_session_rebuild(minimal: Path) -> None:
@@ -68,7 +112,7 @@ def test_tools_share_one_file_snapshot_across_a_mid_session_rebuild(minimal: Pat
     assert explorer.overview()["counts"]["concepts"] == 2
 
     (minimal / "concepts" / "added-after-startup.md").write_text(
-        "---\ntitle: Late\ntype: Reference\n---\n\nAppeared after the snapshot.\n",
+        "---\ntitle: Late\ntype: Concept\n---\n\nAppeared after the snapshot.\n",
         encoding="utf-8",
     )
     # overview and list must not blow up, and must agree with the pinned set.
@@ -120,7 +164,9 @@ def test_search_is_ranked_deterministic_and_snippet_only(minimal: Path) -> None:
     assert first == second  # same bundle + same query → same ranking, always
     results = first["results"]
     assert results, "expected lexical hits"
-    assert all(set(r) == {"path", "kind", "title", "snippet", "score"} for r in results)
+    assert all(
+        set(r) == {"path", "kind", "title", "description", "snippet", "score"} for r in results
+    )
     assert all(len(str(r["snippet"])) < 400 for r in results)  # snippets, never bodies
 
 
@@ -154,7 +200,7 @@ def test_peek_and_read_bound_oversized_frontmatter(minimal: Path) -> None:
     target = minimal / "concepts" / "architecture.md"
     body = target.read_text(encoding="utf-8").split("---\n", 2)[2]
     target.write_text(
-        "---\ntitle: Big\ntype: Reference\nnote: " + "X" * 300_000 + "\n---\n" + body,
+        "---\ntitle: Big\ntype: Concept\nnote: " + "X" * 300_000 + "\n---\n" + body,
         encoding="utf-8",
     )
     explorer = Explorer(minimal)
@@ -178,6 +224,44 @@ def test_read_caps_size(minimal: Path) -> None:
     read = Explorer(minimal).read("concepts/architecture.md", max_chars=20)
     assert len(str(read["body"])) == 20
     assert read["truncated"] is True
+    assert read["start_char"] == 0
+    assert read["next_start"] == 20
+
+
+def test_read_pages_reassemble_the_full_body(minimal: Path) -> None:
+    explorer = Explorer(minimal)
+    full = str(explorer.read("concepts/architecture.md")["body"])
+
+    pages: list[str] = []
+    link_sets: list[list[dict[str, object]]] = []
+    start: int | None = 0
+    while start is not None:
+        page = explorer.read("concepts/architecture.md", max_chars=25, start_char=start)
+        pages.append(str(page["body"]))
+        link_sets.append(page["links"])
+        assert page["body_total_chars"] == len(full)
+        start = page["next_start"]
+
+    assert "".join(pages) == full
+    assert len(pages) > 1
+    # Every page reports the same, whole-document link set.
+    assert all(links == link_sets[0] for links in link_sets)
+    # The chain terminates exactly at the end of the body.
+    last = explorer.read("concepts/architecture.md", max_chars=25, start_char=len(full) - 5)
+    assert last["truncated"] is False
+    assert last["next_start"] is None
+
+
+def test_read_clamps_out_of_range_offsets(minimal: Path) -> None:
+    explorer = Explorer(minimal)
+    full = str(explorer.read("concepts/architecture.md")["body"])
+    past_end = explorer.read("concepts/architecture.md", start_char=len(full) + 100)
+    assert past_end["body"] == ""
+    assert past_end["truncated"] is False
+    assert past_end["next_start"] is None
+    negative = explorer.read("concepts/architecture.md", max_chars=20, start_char=-7)
+    assert negative["start_char"] == 0
+    assert str(negative["body"]) == full[:20]
 
 
 def test_links_reports_both_directions_bounded(minimal: Path) -> None:
@@ -268,7 +352,7 @@ def test_a_symlink_into_derived_state_is_not_bundle_content(tmp_path: Path) -> N
     trace.write_text('{"evidence": "PRIORQUESTION alpha"}', encoding="utf-8")
     (bundle / "index.md").write_text("---\ntitle: B\n---\n\n# B\n", encoding="utf-8")
     (bundle / "concepts" / "real.md").write_text(
-        "---\ntype: Reference\ntitle: R\n---\n\n# R\n\nreal content\n", encoding="utf-8"
+        "---\ntype: Concept\ntitle: R\n---\n\n# R\n\nreal content\n", encoding="utf-8"
     )
     (bundle / "concepts" / "leak.md").symlink_to("../.oknoll/traces/t.json")
 

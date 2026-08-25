@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: System architecture
 description: The deployable workloads and their trust boundaries.
 tags:

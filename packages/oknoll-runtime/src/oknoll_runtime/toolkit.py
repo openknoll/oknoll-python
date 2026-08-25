@@ -125,10 +125,15 @@ class BundleToolkit:
     def peek(self, path: str, *, lines: int = 20) -> dict[str, Any]:
         return self._guarded("peek", lambda: self._explorer.peek(path, lines=lines))
 
-    def read(self, path: str, *, max_chars: int | None = None) -> dict[str, Any]:
+    def read(
+        self, path: str, *, max_chars: int | None = None, start_char: int = 0
+    ) -> dict[str, Any]:
         if max_chars is None:
-            return self._guarded("read", lambda: self._explorer.read(path))
-        return self._guarded("read", lambda: self._explorer.read(path, max_chars=max_chars))
+            return self._guarded("read", lambda: self._explorer.read(path, start_char=start_char))
+        return self._guarded(
+            "read",
+            lambda: self._explorer.read(path, max_chars=max_chars, start_char=start_char),
+        )
 
     def links(self, path: str, *, direction: str = "both", limit: int = 16) -> dict[str, Any]:
         return self._guarded(

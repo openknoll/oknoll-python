@@ -1,5 +1,5 @@
 ---
-type: Reference
+type: Concept
 title: Authentication architecture
 description: How the application authenticates users and services.
 tags:

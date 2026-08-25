@@ -23,6 +23,7 @@ from okf_core import (
 from okf_core import (
     __version__ as okf_core_version,
 )
+from okf_core.ask import ASK_POLICY_V1
 from okf_core.provider import GENERATOR_VERSION, PROMPT_VERSIONS
 
 from oknoll_eval.benchmark import Benchmark
@@ -30,7 +31,10 @@ from oknoll_eval.benchmark import Benchmark
 CONDITIONS = ("pd", "rag")
 # 2: rows gained retrieval_hit (gold ∩ evidence_paths) and model_usage
 #    (provider-reported input/output tokens for the answer call, or None).
-RESULTS_SCHEMA_VERSION = 2
+# 3: results gained ask_policy_version — the PD policy the run was pinned to
+#    (interactive ask/chat now default to a budget-proportional v2, so the
+#    pin is load-bearing provenance for comparing runs).
+RESULTS_SCHEMA_VERSION = 3
 
 
 def run_benchmark(
@@ -57,6 +61,10 @@ def run_benchmark(
                 today=today,
                 clock=clock,
                 timer=timer,
+                # The a2k-v1 spec is frozen under policy v1 — the benchmark
+                # must not drift when the interactive default policy evolves;
+                # a policy-v2 benchmark would be a new spec name (a2k-v2).
+                policy=ASK_POLICY_V1,
             )
             cited_paths = [c.path for c in result.citations]
             cited_resources = sorted({r for c in result.citations for r in c.resources})
@@ -109,6 +117,7 @@ def run_benchmark(
         "okf_core_version": okf_core_version,
         "generator_version": GENERATOR_VERSION,
         "prompt_versions": dict(PROMPT_VERSIONS),
+        "ask_policy_version": ASK_POLICY_V1.version,
         "questions": len(benchmark.questions),
         "rows": rows,
     }

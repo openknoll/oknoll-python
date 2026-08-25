@@ -23,6 +23,7 @@ from okf_core import (
     read_current_revision_id,
     revision_dir,
 )
+from okf_core import pipeline as pipeline_mod
 from okf_core.bundle import iter_files
 from okf_core.pipeline import _split_sections, _validate_plan
 from oknoll_connectors import FetchPolicy, FilesConnector
@@ -319,13 +320,13 @@ def test_failed_build_keeps_cache_so_retry_is_incremental(tmp_path: Path) -> Non
     assert cache_file.is_file()
     assert "concepts" in cache_file.read_text(encoding="utf-8")
 
-    # The retry replays every cached decision and re-asks only for the one
-    # field that never succeeded.
+    # The retry replays every cached decision and asks only for the field that
+    # never succeeded plus the bundle description the failed build never reached.
     calls_before = len(provider.calls)
     provider.fail_title = ""
     outcome = _build(tmp_path, provider)
     assert outcome.published
-    assert len(provider.calls) - calls_before == 1
+    assert provider.calls[calls_before:] == ["concept-description", "bundle-description"]
 
 
 # -- generation_version knob -------------------------------------------------
@@ -365,3 +366,121 @@ def test_cached_generations_record_serving_model(tmp_path: Path) -> None:
     entries = json.loads(cache_file.read_text(encoding="utf-8"))["generate"].values()
     assert entries
     assert all(entry["model"] == "scripted:fallback-model" for entry in entries)
+
+
+# -- recursive split of oversized single-section slices ----------------------
+
+_LONG = ("Detail sentence about the topic. " * 90).strip()  # ~3,000 rendered chars
+
+DEEP_MD = f"""# Big Spec
+
+Intro paragraph.
+
+## Overview
+
+Short section.
+
+## Details
+
+Intro to details.
+
+### Alpha
+
+{_LONG}
+
+### Beta
+
+{_LONG}
+
+### Gamma
+
+{_LONG}
+"""
+
+TOP_PLAN = {
+    "concepts": [
+        {"title": "Overview", "sections": [0]},
+        {"title": "Details", "sections": [1]},
+    ]
+}
+
+SUB_PLAN = {
+    "concepts": [
+        {"title": "Alpha Part", "sections": [0]},
+        {"title": "Beta and Gamma", "sections": [1, 2]},
+    ]
+}
+
+
+class TitleScriptedProvider(StubModelProvider):
+    """Concept-plan replies scripted per document title; stub otherwise."""
+
+    id = "title-scripted"
+
+    def __init__(self, plans: dict[str, dict[str, Any]]) -> None:
+        self.plans = plans
+        self.plan_payloads: list[dict[str, Any]] = []
+
+    def complete(self, prompt_id: str, payload: dict[str, Any]) -> str:
+        if prompt_id == "concept-plan":
+            self.plan_payloads.append(payload)
+            reply = self.plans.get(str(payload.get("title", "")))
+            return json.dumps(reply) if reply is not None else '{"concepts": []}'
+        return super().complete(prompt_id, payload)
+
+
+def test_oversized_single_section_slice_is_replanned_one_level_down(tmp_path: Path) -> None:
+    provider = TitleScriptedProvider({"Big Spec": TOP_PLAN, "Details": SUB_PLAN})
+    _write_sources(tmp_path, {"deep.md": DEEP_MD})
+    outcome = _build(tmp_path, provider)
+
+    assert outcome.published
+    assert outcome.lint_report.passed(strict=True)
+    rev = revision_dir(tmp_path / "bundle", outcome.revision_id)
+    concepts = sorted(p.name for p in (rev / "concepts").iterdir())
+    assert concepts == ["alpha-part.md", "beta-and-gamma.md", "overview.md"]
+
+    # Exactly two plan decisions: the document and the one oversized slice —
+    # depth stops there, and small slices are never re-planned.
+    assert len(provider.plan_payloads) == 2
+    top, sub = provider.plan_payloads
+    assert top["title"] == "Big Spec"
+    # The planner sees each section's next-level structure.
+    assert top["sections"][1]["subheadings"] == ["Alpha", "Beta", "Gamma"]
+    assert sub["title"] == "Details"
+    assert [s["heading"] for s in sub["sections"]] == ["Alpha", "Beta", "Gamma"]
+
+    # Both decisions were cached: a rebuild needs no plan call and reproduces.
+    calls_before = len(provider.plan_payloads)
+    second = _build(tmp_path, provider)
+    assert second.revision_id == outcome.revision_id
+    assert len(provider.plan_payloads) == calls_before
+
+
+def test_recursive_split_respects_the_total_concept_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pipeline_mod, "PLAN_MAX_CONCEPTS_TOTAL", 2)
+    provider = TitleScriptedProvider({"Big Spec": TOP_PLAN, "Details": SUB_PLAN})
+    _write_sources(tmp_path, {"deep.md": DEEP_MD})
+    outcome = _build(tmp_path, provider)
+
+    # Splitting "Details" would make 3 total (> 2): the split is skipped in
+    # plan order and the original slice kept.
+    rev = revision_dir(tmp_path / "bundle", outcome.revision_id)
+    concepts = sorted(p.name for p in (rev / "concepts").iterdir())
+    assert concepts == ["details.md", "overview.md"]
+
+
+def test_small_or_grouped_slices_are_never_replanned(tmp_path: Path) -> None:
+    """A grouped slice (several sections) and a small single-section slice both
+    stay as the model planned them."""
+    provider = TitleScriptedProvider(
+        {
+            "spec.md": {"concepts": []},
+            "Big Spec": {"concepts": [{"title": "Everything", "sections": [0, 1]}]},
+        }
+    )
+    _write_sources(tmp_path, {"deep.md": DEEP_MD})
+    _build(tmp_path, provider)
+    assert [p["title"] for p in provider.plan_payloads] == ["Big Spec"]
